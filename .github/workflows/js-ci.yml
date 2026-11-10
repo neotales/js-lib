@@ -117,9 +117,9 @@ jobs:
             [tools."github:saghul/txiki.js"]
             version = "26.11.0"
             [tools."github:saghul/txiki.js".platforms]
-            macos-arm64 = { asset_pattern = "txiki-macos-arm64.zip", bin = "txiki-macos-arm64/tjs" }
-            macos-x64 = { asset_pattern = "txiki-macos-x86_64.zip", bin = "txiki-macos-x86_64/tjs" }
-            windows-x64 = { asset_pattern = "txiki-windows-x86_64.zip", bin = "txiki-windows-x86_64/tjs.exe" }
+            macos-arm64 = { asset_pattern = "txiki-macos-arm64.zip", strip_components = 1, bin = "tjs" }
+            macos-x64 = { asset_pattern = "txiki-macos-x86_64.zip", strip_components = 1, bin = "tjs" }
+            windows-x64 = { asset_pattern = "txiki-windows-x86_64.zip", strip_components = 1, bin = "tjs.exe" }
 
       - name: Run the lanes for this OS
         shell: bash
