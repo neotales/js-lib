@@ -13,22 +13,21 @@ if (!lanes.includes(lane)) {
   throw new Error("unknown lane");
 }
 
-if (lane === "txiki") {
-  console.log("not run txiki: Linux has no release asset; mise cannot install tjs here");
-  throw new Error("not run txiki");
-}
-
 if (lane === "deno") await spawn("deno", ["run", "test/main.ts"]);
 else if (lane === "ende") await spawn("ende", ["run", "test/main.ts"]);
 else if (lane === "node") await spawn("node", [bundle()]);
 else if (lane === "quickjs") await spawn(qjs(), [bundle()]);
 else if (lane === "workerd") await runWorkerd(bundle());
+else if (lane === "txiki") await spawn("tjs", ["run", bundle()]);
 else await runClearScript();
 
 async function spawn(bin: string, args: string[]): Promise<void> {
   const resolved = Bun.which(bin);
   if (resolved === null) {
-    console.log(`not run ${lane}: ${bin} is not on PATH`);
+    const why = lane === "txiki"
+      ? "tjs is not on PATH. txiki.js publishes macOS and Windows releases, not Linux"
+      : `${bin} is not on PATH`;
+    console.log(`not run ${lane}: ${why}`);
     throw new Error(`not run ${lane}`);
   }
   const child = Bun.spawn([resolved, ...args], {

@@ -23,4 +23,4 @@ bun run test:clearscript
 
 A lane that cannot run prints `not run` and exits non-zero. That is not a pass.
 
-CI runs Bun, Node, and Deno on every branch. Ende, QuickJS-ng, workerd, and ClearScript run on `dev`, `plab-js-lib`, tags, and pull requests. txiki.js has no Linux release asset, so that lane is not in CI. Publishing is a separate workflow, and the action pin check is a third one.
+CI runs Bun, Node, and Deno on every branch, on Ubuntu, macOS, and Windows. Ende, QuickJS-ng, workerd, and ClearScript run on Ubuntu. txiki.js runs on macOS and Windows, where its releases exist. Those extra lanes run on `dev`, `plab-js-lib`, tags, and pull requests. Publishing is a separate workflow, and the action pin check is a third one.
