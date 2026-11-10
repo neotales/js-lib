@@ -24,7 +24,7 @@ directory gets a real file.
 
 ## Tests
 
-`bun run test` is the gate. The files under `test/` must not import `node:` or read `process`. Ende has neither. Do not use top-level await in the runner. A test that needs a runtime permission branches on that runtime and is a skip everywhere else.
+`bun run test` is the gate. The other lanes are `bun run test:<lane>` and the scripts live in `eng/scripts/`. Each lane has a timeout and must finish in well under a minute. A lane that cannot run exits non-zero. The files under `test/` must not import `node:` or read `process`. Ende has neither. Do not use top-level await in the runner. A test that needs a runtime permission branches on that runtime and is a skip everywhere else.
 
 ## Secrets
 

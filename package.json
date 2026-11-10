@@ -5,11 +5,12 @@
   "description": "Task entry for the js-lib satellite. Bun runs the tasks. The tests do not import node: or process.",
   "scripts": {
     "test": "bun test/main.ts",
-    "test:node": "bun test/lanes.ts node",
-    "test:deno": "bun test/lanes.ts deno",
-    "test:ende": "bun test/lanes.ts ende",
-    "test:workerd": "bun test/lanes.ts workerd",
-    "test:quickjs": "bun test/lanes.ts quickjs",
-    "test:txiki": "bun test/lanes.ts txiki"
+    "test:node": "bun eng/scripts/test-lane.ts node",
+    "test:deno": "bun eng/scripts/test-lane.ts deno",
+    "test:ende": "bun eng/scripts/test-lane.ts ende",
+    "test:workerd": "bun eng/scripts/test-lane.ts workerd",
+    "test:quickjs": "bun eng/scripts/test-lane.ts quickjs",
+    "test:txiki": "bun eng/scripts/test-lane.ts txiki",
+    "test:clearscript": "bun eng/scripts/test-lane.ts clearscript"
   }
 }

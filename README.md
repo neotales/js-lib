@@ -18,6 +18,7 @@ bun run test:ende
 bun run test:workerd
 bun run test:quickjs
 bun run test:txiki
+bun run test:clearscript
 ```
 
 A lane that cannot run prints `not run` and exits non-zero. That is not a pass.
