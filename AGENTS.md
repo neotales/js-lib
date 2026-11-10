@@ -22,6 +22,10 @@ directory gets a real file.
 
 `dev` is the integration branch. Do not create `main` or `master`.
 
+## Tests
+
+`bun run test` is the gate. The files under `test/` must not import `node:` or read `process`. Ende has neither. Do not use top-level await in the runner. A test that needs a runtime permission branches on that runtime and is a skip everywhere else.
+
 ## Secrets
 
 No credentials, tokens, or key bodies in this tree. A local env file is
