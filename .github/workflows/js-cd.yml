@@ -1,0 +1,117 @@
+# Publish this repository. Tests for a branch live in js-ci.yml. Pin checks live in js-check-actions.yml.
+#
+# npm trusted publishing for @neotales/* was pinned to this repository and
+# std-cd.yml. This file is js-cd.yml. Repoint the trusted publisher before a
+# tag publish is expected to succeed. No npm token. The publish job uses OIDC.
+name: js cd
+
+on:
+  push:
+    tags:
+      - "std/v[0-9]*"
+      - "js/v[0-9]*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: js-cd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: bun node deno
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check the tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          case "$RELEASE_TAG" in
+            std/v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]-r.[0-9]*) ;;
+            js/v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]-r.[0-9]*) ;;
+            *)
+              echo "js-cd.yml accepts std/vYYYY.MM.DD-r.N or js/vYYYY.MM.DD-r.N. Got ${RELEASE_TAG}."
+              exit 1
+              ;;
+          esac
+
+      - name: Set up Bun 1.4.4
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      - name: Set up Node 26.13.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26.13.0
+          package-manager-cache: false
+
+      - name: Set up Deno 2.9.8
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.8
+
+      - name: Test on Bun, Node, and Deno
+        run: |
+          set -euo pipefail
+          bun run test
+          bun run test:node
+          bun run test:deno
+
+  publish:
+    name: publish
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: write
+      id-token: write
+      packages: write
+    steps:
+      - name: Check out the release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node 26.13.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26.13.0
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Install npm 11.5.1
+        run: npm install -g npm@11.5.1
+
+      - name: Publish npm packages
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          maps=(std/npm/*/package.json)
+          if [ "${#maps[@]}" -eq 0 ]; then
+            echo "No std/npm packages yet. Nothing to publish."
+            exit 0
+          fi
+          for manifest in "${maps[@]}"; do
+            name="$(node -p "require('./${manifest}').name")"
+            version="$(node -p "require('./${manifest}').version")"
+            tag="latest"
+            case "$version" in
+              *-alpha.*) tag="alpha" ;;
+              *-beta.*) tag="beta" ;;
+              *-rc.*) tag="rc" ;;
+            esac
+            if npm view "${name}@${version}" version >/dev/null 2>&1; then
+              echo "Already on npmjs: ${name}@${version}"
+            else
+              npm publish --access public --tag "$tag" --provenance "$(dirname "$manifest")"
+            fi
+            npm publish --access public --tag "$tag" --registry https://npm.pkg.github.com "$(dirname "$manifest")" || echo "GitHub Packages publish skipped or already present: ${name}@${version}"
+          done

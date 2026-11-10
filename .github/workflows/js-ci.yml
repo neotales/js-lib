@@ -1,0 +1,103 @@
+# Test this repository. Publishing is js-cd.yml. Action pin checks are js-check-actions.yml.
+name: js ci
+
+on:
+  push:
+    paths:
+      - "std/**"
+      - "eng/**"
+      - "test/**"
+      - "package.json"
+      - ".github/workflows/js-ci.yml"
+      - ".github/workflows/js-cd.yml"
+  pull_request:
+    paths:
+      - "std/**"
+      - "eng/**"
+      - "test/**"
+      - "package.json"
+      - ".github/workflows/js-ci.yml"
+      - ".github/workflows/js-cd.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: js-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: bun node deno
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Bun 1.4.4
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      - name: Set up Node 26.13.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26.13.0
+          package-manager-cache: false
+
+      - name: Set up Deno 2.9.8
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.8
+
+      - name: Test on Bun
+        run: bun run test
+
+      - name: Test on Node
+        run: bun run test:node
+
+      - name: Test on Deno
+        run: bun run test:deno
+
+  extra:
+    name: other runtimes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # dev, plab-js-lib, every tag, and every pull request. Other branches stay on bun/node/deno.
+    if: >-
+      github.event_name == 'pull_request' ||
+      startsWith(github.ref, 'refs/tags/') ||
+      github.ref == 'refs/heads/dev' ||
+      github.ref == 'refs/heads/plab-js-lib'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Bun 1.4.4
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      - name: Install pinned extra runtimes
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          version: 2026.11.3
+          mise_toml: |
+            [tools]
+            workerd = "1.20261109.1"
+            dotnet = "11.0.100-rc.2.26504.105"
+            "github:quickjs-ng/quickjs" = { version = "0.18.0", asset_pattern = "qjs-linux-x86_64", bin = "qjs-linux-x86_64" }
+            "github:theende/ende" = { version = "2026.11.06", asset_pattern = "ende-x86_64-unknown-linux-gnu.zip", bin = "ende" }
+
+      - name: Test on Ende
+        run: bun run test:ende
+
+      - name: Test on QuickJS-ng
+        run: bun run test:quickjs
+
+      - name: Test on workerd
+        run: bun run test:workerd
+
+      - name: Test on ClearScript
+        run: bun run test:clearscript
