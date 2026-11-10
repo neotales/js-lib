@@ -1,0 +1,51 @@
+# Installed dependencies. Neither Bun nor Node shares a cache across repos.
+node_modules/
+
+# Build output. A published package is built from source, not committed as dist/.
+dist/
+*.tsbuildinfo
+.build/
+.runtime-lab/
+.wrangler/
+
+# Release artifacts and npm tarballs. Published, not committed.
+/artifacts/
+*.tgz
+
+# Lockfiles are not ignored. Whether one is committed is a decision for the
+# package that owns it. A blanket ignore has hidden a lock a restore required.
+
+# Editor noise. `.vscode` itself is allowed: this directory is the root of the
+# published repository, so committed editor settings, `.agents`, and `.github`
+# belong here and are exported. Only the uncommitted noise is ignored.
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating system noise.
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local environment and credentials. A token in a committed file is a published
+# token. Do not add a blanket *.key or *.pem rule: that has hidden a test
+# fixture a build needed. Except a real secret by name when one exists.
+.env
+.env.*
+!.env.example
+
+# Coverage output.
+coverage/
+lcov.info
+
+# Python bytecode from a script, if one is added later.
+__pycache__/
+*.pyc
+
+# Another agent's local session files. A git add -A has committed these before.
+.agentsroom/
+.claude/

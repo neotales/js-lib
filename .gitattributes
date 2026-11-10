@@ -1,0 +1,30 @@
+# Normalise text to LF in the repository.
+* text=auto eol=lf
+
+# Assets and release artifacts are bytes. A lone CR in a fixture is data.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.svg text eol=lf
+*.ttf binary
+*.woff binary
+*.woff2 binary
+*.wasm binary
+*.zip binary
+*.tgz binary
+
+# Lockfiles are machine generated. Marking them keeps them out of language
+# stats. This is not a decision to commit them.
+deno.lock linguist-generated=true
+pnpm-lock.yaml linguist-generated=true
+bun.lock linguist-generated=true
+package-lock.json linguist-generated=true
+yarn.lock linguist-generated=true
+
+# Installed dependencies and build output, if they are ever force-added.
+node_modules/** linguist-vendored
+dist/** linguist-generated=true linguist-vendored
+artifacts/** linguist-generated=true linguist-vendored
