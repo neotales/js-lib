@@ -19,10 +19,11 @@ bun run test:workerd
 bun run test:quickjs
 bun run test:txiki
 bun run test:clearscript
+bun run sync:ende
 ```
 
 A lane that cannot run prints `not run` and exits non-zero. That is not a pass.
 
 CI runs Bun, Node, and Deno on every branch, on Ubuntu, macOS, and Windows. Ende, QuickJS-ng, workerd, and ClearScript run on Ubuntu. txiki.js runs on macOS and Windows, where its releases exist. Those extra lanes run on `dev`, `plab-js-lib`, tags, and pull requests. Publishing is a separate workflow, and the action pin check is a third one.
 
-Tests are not published. A JSR package excludes them, and an npm pack that still contains one is refused. A test may import another module in this tree by its `@neotales/` name. Deno and Ende resolve that name from the workspace. The other lanes rewrite it to a relative path. That link is not part of the published package.
+Tests are not published. A JSR package excludes them, and an npm pack that still contains one is refused. A test may import another module in this tree by its `@neotales/` name. Deno and Ende resolve that name from the workspace. The other lanes rewrite it to a relative path. That link is not part of the published package. `sync:ende` copies `deno.json` onto `ende.json`. Edit the Deno file, then run the task.

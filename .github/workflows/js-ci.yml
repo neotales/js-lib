@@ -59,6 +59,10 @@ jobs:
         if: runner.os == 'Linux'
         run: node eng/scripts/check-publish.mjs
 
+      - name: Refuse a stale ende.json
+        if: runner.os == 'Linux'
+        run: bun run sync:ende -- --check
+
       - name: Test on Bun
         run: bun run test
 

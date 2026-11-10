@@ -11,6 +11,7 @@
     "test:workerd": "bun eng/scripts/test-lane.ts workerd",
     "test:quickjs": "bun eng/scripts/test-lane.ts quickjs",
     "test:txiki": "bun eng/scripts/test-lane.ts txiki",
-    "test:clearscript": "bun eng/scripts/test-lane.ts clearscript"
+    "test:clearscript": "bun eng/scripts/test-lane.ts clearscript",
+    "sync:ende": "bun eng/scripts/sync-ende.ts"
   }
 }

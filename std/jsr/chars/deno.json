@@ -40,7 +40,9 @@
       "**/*_spec.ts",
       "**/test/run.ts",
       "**/test/assert.ts",
-      "**/test/main.ts"
+      "**/test/main.ts",
+      "ende.json",
+      "ende.jsonc"
     ]
   },
   "repository": {

@@ -60,6 +60,9 @@ jobs:
       - name: Refuse a package that still contains tests
         run: node eng/scripts/check-publish.mjs
 
+      - name: Refuse a stale ende.json
+        run: bun run sync:ende -- --check
+
       - name: Test on Bun, Node, and Deno
         run: |
           set -euo pipefail

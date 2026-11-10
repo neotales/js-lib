@@ -28,7 +28,7 @@ directory gets a real file.
 
 A test may import a sibling as `@neotales/<name>` or `@neotales/<name>/<export>`. That name is a member of the satellite `deno.json` workspace. It is not an npm `workspace:` link, and a lane must not fetch it from a registry.
 
-Deno and Ende resolve the name from that workspace and run `test/main.ts` as source. Ende warns that `deno.json` is deprecated. Keep the name. JSR and Deno require it.
+Deno and Ende resolve the name from that workspace and run `test/main.ts` as source. `deno.json` stays the file Deno and JSR read. `bun run sync:ende` copies each one onto `ende.json` so Ende does not warn. Do not edit `ende.json`. A package excludes it from publish.
 
 Bun does not read a Deno workspace. Neither do Node, QuickJS-ng, workerd, txiki.js, or ClearScript. The launcher rewrites `@neotales/<name>` to a relative path from the member's `exports` before those lanes see the file. The bundle lanes inline that path. ClearScript gets the rewritten `.js` graph. A specifier that is not a workspace member fails the lane.
 

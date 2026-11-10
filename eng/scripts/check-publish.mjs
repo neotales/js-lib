@@ -33,6 +33,8 @@ const requiredExclude = [
   "**/test/run.ts",
   "**/test/assert.ts",
   "**/test/main.ts",
+  "ende.json",
+  "ende.jsonc",
 ];
 
 const root = satelliteRoot();
@@ -100,7 +102,9 @@ function checkJsr(manifest) {
       fail(`${manifest}: dry run included ${file}, which is outside the package`);
       continue;
     }
-    if (isTestFile(file) || isHarnessFile(file)) fail(`${manifest}: dry run included ${rel}`);
+    if (isTestFile(file) || isHarnessFile(file) || isEndeConfig(file)) {
+      fail(`${manifest}: dry run included ${rel}`);
+    }
   }
 }
 
@@ -110,7 +114,9 @@ function checkNpm(manifest) {
     fail(`${manifest}: contains workspace:. npm publish does not rewrite it`);
   }
   for (const path of packFiles(dirname(manifest))) {
-    if (isTestFile(path) || isHarnessFile(path)) fail(`${manifest}: pack included ${path}`);
+    if (isTestFile(path) || isHarnessFile(path) || isEndeConfig(path)) {
+      fail(`${manifest}: pack included ${path}`);
+    }
   }
 }
 
@@ -233,6 +239,10 @@ function fail(message) {
 
 function norm(path) {
   return path.split("\\").join("/");
+}
+
+function isEndeConfig(path) {
+  return /(?:^|\/)ende\.jsonc?$/.test(norm(path));
 }
 
 function isDir(path) {
