@@ -2,23 +2,31 @@
 // does not leak into Ende. A lane that does not run throws.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
+import {
+  collectLocalGraph,
+  importSpecifiers,
+  loadWorkspace,
+  rewriteImports,
+  resolveSpecifier,
+} from "./workspace-map.mjs";
 
 const root = join(import.meta.dir, "../..");
 const lane = Bun.argv[2] ?? "";
-const lanes = ["node", "deno", "ende", "workerd", "quickjs", "txiki", "clearscript"];
+const lanes = ["bun", "node", "deno", "ende", "workerd", "quickjs", "txiki", "clearscript"];
 
 if (!lanes.includes(lane)) {
   console.error(`usage: bun eng/scripts/test-lane.ts <${lanes.join("|")}>`);
   throw new Error("unknown lane");
 }
 
-if (lane === "deno") await spawn("deno", ["run", "test/main.ts"]);
+if (lane === "bun") await runBun();
+else if (lane === "deno") await spawn("deno", ["run", "test/main.ts"]);
 else if (lane === "ende") await spawn("ende", ["run", "test/main.ts"]);
-else if (lane === "node") await spawn("node", [bundle()]);
-else if (lane === "quickjs") await spawn(qjs(), [bundle()]);
-else if (lane === "workerd") await runWorkerd(bundle());
-else if (lane === "txiki") await spawn("tjs", ["run", bundle()]);
+else if (lane === "node") await spawn("node", [await bundle()]);
+else if (lane === "quickjs") await spawn(qjs(), [await bundle()]);
+else if (lane === "workerd") await runWorkerd(await bundle());
+else if (lane === "txiki") await spawn("tjs", ["run", await bundle()]);
 else await runClearScript();
 
 async function spawn(bin: string, args: string[]): Promise<void> {
@@ -43,15 +51,65 @@ function qjs(): string {
   return Bun.which("qjs") ?? Bun.which("qjs-linux-x86_64") ?? "qjs";
 }
 
-function bundle(): string {
+async function runBun(): Promise<void> {
+  const entry = join(root, "test/main.ts");
+  const workspace = loadWorkspace(root);
+  const files = collectLocalGraph(entry, workspace);
+  if (!needsWorkspaceRewrite(files)) {
+    await spawn("bun", [entry]);
+    return;
+  }
+  // Bun does not read the Deno workspace. The copy keeps the same paths, so a
+  // rewritten relative import still finds the sibling that was copied with it.
+  const outRoot = join(root, ".build/bun");
+  for (const file of files) {
+    const source = rewriteImports(readFileSync(file, "utf8"), file, workspace, "ts");
+    const dest = join(outRoot, relative(root, file));
+    mkdirSync(dirname(dest), { recursive: true });
+    writeFileSync(dest, source);
+  }
+  await spawn("bun", [join(outRoot, relative(root, entry))]);
+}
+
+async function bundle(): Promise<string> {
   const out = join(root, ".build/tests.js");
   mkdirSync(dirname(out), { recursive: true });
-  const child = Bun.spawnSync(
-    ["bun", "build", "test/main.ts", "--outfile", out, "--format", "esm", "--target", "browser"],
-    { cwd: root, stdout: "inherit", stderr: "inherit" },
-  );
-  if (child.exitCode !== 0) throw new Error("bundle failed");
+  const entry = join(root, "test/main.ts");
+  const workspace = loadWorkspace(root);
+  if (!needsWorkspaceRewrite(collectLocalGraph(entry, workspace))) {
+    const child = Bun.spawnSync(
+      ["bun", "build", "test/main.ts", "--outfile", out, "--format", "esm", "--target", "browser"],
+      { cwd: root, stdout: "inherit", stderr: "inherit" },
+    );
+    if (child.exitCode !== 0) throw new Error("bundle failed");
+    return out;
+  }
+  const result = await Bun.build({
+    entrypoints: [entry],
+    format: "esm",
+    target: "browser",
+    plugins: [{
+      name: "workspace",
+      setup(build) {
+        build.onResolve({ filter: /^@neotales\// }, (args) => {
+          const target = resolveSpecifier(workspace, args.path);
+          if (target == null) throw new Error(`${args.path} is not a workspace export`);
+          return { path: target };
+        });
+      },
+    }],
+  });
+  if (!result.success) {
+    throw new Error(result.logs.map((item) => item.message).join("\n") || "bundle failed");
+  }
+  writeFileSync(out, await result.outputs[0].text());
   return out;
+}
+
+function needsWorkspaceRewrite(files: string[]): boolean {
+  return files.some((file) =>
+    importSpecifiers(readFileSync(file, "utf8")).some((spec) => spec.startsWith("@neotales/"))
+  );
 }
 
 async function runWorkerd(file: string): Promise<void> {
@@ -174,25 +232,14 @@ async function runClearScript(): Promise<void> {
 function transpileModules(): string {
   const outRoot = join(root, ".build/modules");
   const transpiler = new Bun.Transpiler({ loader: "ts" });
-  const files = ["test/run.ts", "test/assert.ts", "test/main.ts", ...charsFiles()];
-  for (const rel of files) {
-    const source = readFileSync(join(root, rel), "utf8");
-    const js = transpiler.transformSync(rewriteSpecifiers(source));
-    const dest = join(outRoot, rel.replace(/\.ts$/, ".js"));
+  const workspace = loadWorkspace(root);
+  const files = collectLocalGraph(join(root, "test/main.ts"), workspace);
+  for (const file of files) {
+    const source = rewriteImports(readFileSync(file, "utf8"), file, workspace, "js");
+    const js = transpiler.transformSync(source);
+    const dest = join(outRoot, relative(root, file).replace(/\.ts$/, ".js"));
     mkdirSync(dirname(dest), { recursive: true });
     writeFileSync(dest, js);
   }
   return join(outRoot, "test/main.js");
-}
-
-function charsFiles(): string[] {
-  const glob = new Bun.Glob("std/jsr/chars/**/*.ts");
-  return [...glob.scanSync({ cwd: root })].filter((path) => !path.endsWith(".d.ts"));
-}
-
-function rewriteSpecifiers(source: string): string {
-  return source.replaceAll(/from "(\.\.?\/[^"]+)\.ts"/g, 'from "$1.js"').replaceAll(
-    /import "(\.\.?\/[^"]+)\.ts"/g,
-    'import "$1.js"',
-  );
 }

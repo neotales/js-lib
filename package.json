@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Task entry for the js-lib satellite. Bun runs the tasks. The tests do not import node: or process.",
   "scripts": {
-    "test": "bun test/main.ts",
+    "test": "bun eng/scripts/test-lane.ts bun",
     "test:node": "bun eng/scripts/test-lane.ts node",
     "test:deno": "bun eng/scripts/test-lane.ts deno",
     "test:ende": "bun eng/scripts/test-lane.ts ende",

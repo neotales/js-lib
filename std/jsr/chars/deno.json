@@ -24,6 +24,25 @@
     "./to-upper": "./to_upper.ts",
     "./types": "./types.ts"
   },
+  "publish": {
+    "exclude": [
+      "**/*.test.ts",
+      "**/*_test.ts",
+      "**/*.test.js",
+      "**/*_test.js",
+      "**/*.test.mjs",
+      "**/*_test.mjs",
+      "**/*.test.cjs",
+      "**/*_test.cjs",
+      "**/*.test.d.ts",
+      "**/*_test.d.ts",
+      "**/*.spec.ts",
+      "**/*_spec.ts",
+      "**/test/run.ts",
+      "**/test/assert.ts",
+      "**/test/main.ts"
+    ]
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/neotales/js-lib.git",

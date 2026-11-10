@@ -57,6 +57,9 @@ jobs:
         with:
           deno-version: v2.9.8
 
+      - name: Refuse a package that still contains tests
+        run: node eng/scripts/check-publish.mjs
+
       - name: Test on Bun, Node, and Deno
         run: |
           set -euo pipefail
@@ -89,6 +92,14 @@ jobs:
 
       - name: Install npm 11.5.1
         run: npm install -g npm@11.5.1
+
+      - name: Set up Deno 2.9.8
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.8
+
+      - name: Refuse a package that still contains tests
+        run: node eng/scripts/check-publish.mjs
 
       - name: Publish npm packages
         run: |

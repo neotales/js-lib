@@ -55,6 +55,10 @@ jobs:
         with:
           deno-version: v2.9.8
 
+      - name: Refuse a package that still contains tests
+        if: runner.os == 'Linux'
+        run: node eng/scripts/check-publish.mjs
+
       - name: Test on Bun
         run: bun run test
 
