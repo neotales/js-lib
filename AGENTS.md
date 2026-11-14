@@ -38,6 +38,10 @@ Bun does not read a Deno workspace. Neither do Node, QuickJS-ng, workerd, txiki.
 
 Test files are not part of a package. Every `jsr/*/deno.json` sets `publish.exclude` so `*.test.ts`, `*_test.ts`, `*.spec.ts`, and the same names in `.js`, `.mjs`, `.cjs`, and `.d.ts` are left out, and exclude the unpublished harness modules, which declare `publish: false`. `jsr publish` also follows imports, so an export must not import a test file or the harness module. `eng/scripts/check-publish.mjs` fails if a dry run would ship one. An npm twin is refused the same way: `npm pack` must not list a test file. `workspace:*` is allowed in the twin. Any other `workspace:` link is refused.
 
+`js-cd.yml` publishes on a release tag. `std/v*` selects `std`, `os/v*` selects `os`, and `js/v*` keeps its existing `std` meaning. `eng/scripts/publish.mjs` preflights every package before the first upload with a release-equivalent `deno publish --dry-run`, then publishes in dependency order. npm publishes with `pnpm publish`, which rewrites `workspace:*`; `npm publish` does not. Both registries authenticate with GitHub Actions OIDC, not a token. An existing version is never skipped blindly: npm requires an exact packed-tarball sha512 match, and an existing JSR version is a hard failure with no automated recovery. Unrecognized prereleases are rejected before upload. A release is a tag push; the ref guard verifies the checked-out HEAD is `github.sha`. Registry-side setup, recovery limits, and failure modes are in [docs/publishing.md](docs/publishing.md).
+
+`os/deno.json` is a nested Deno workspace with `nodeModulesDir: auto`, and `os/ende.json` is its synced copy. Deno does not read `os/pnpm-workspace.yaml`; without the file it tries to migrate it during `deno publish`, and the `is-elevated` type check fails on `@types/node`.
+
 ## Secrets
 
 No credentials, tokens, or key bodies in this tree. A local env file is

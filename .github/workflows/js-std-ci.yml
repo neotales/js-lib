@@ -76,6 +76,10 @@ jobs:
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: node --test eng/scripts/test-discovery.test.mjs
 
+      - name: Test the release planner
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: node --test eng/scripts/publish.test.mjs
+
       # dev, plab-js-lib, and rt-<runtime>. A pull request uses head_ref.
       - name: Install pinned Linux runtimes
         if: >-

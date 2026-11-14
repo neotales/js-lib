@@ -1,8 +1,13 @@
 # Publish this repository. Tests for a branch live in js-std-ci.yml and js-os-ci.yml. Pin checks live in js-check-actions.yml.
 #
-# npm trusted publishing for @neotales/* was pinned to this repository and
-# std-cd.yml. This file is js-cd.yml. Repoint the trusted publisher before a
-# tag publish is expected to succeed. No npm token. The publish job uses OIDC.
+# Publishing is one tag-triggered job with two registries. npm and JSR both
+# authenticate with GitHub Actions OIDC (id-token: write); no token is read.
+# The npm trusted publisher is configured per package on npmjs.com and must
+# name this repository, workflow js-cd.yml, and environment production. The
+# JSR package must be linked to neotales/js-lib. Neither is done by this file.
+# eng/scripts/publish.mjs preflights every package before the first upload. An
+# existing version is never skipped blindly: npm requires an exact tarball
+# match, and an existing JSR version is a hard failure. See docs/publishing.md.
 name: js cd
 
 on:
@@ -10,7 +15,7 @@ on:
     tags:
       - "std/v[0-9]*"
       - "js/v[0-9]*"
-
+      - "os/v[0-9]*"
 permissions:
   contents: read
 
@@ -30,6 +35,11 @@ jobs:
     steps:
       - name: Check out the release
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Verify the release checkout
+        run: node eng/scripts/check-release-ref.mjs
 
       - name: Check the tag
         env:
@@ -39,8 +49,9 @@ jobs:
           case "$RELEASE_TAG" in
             std/v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]-r.[0-9]*) ;;
             js/v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]-r.[0-9]*) ;;
+            os/v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]-r.[0-9]*) ;;
             *)
-              echo "js-cd.yml accepts std/vYYYY.MM.DD-r.N or js/vYYYY.MM.DD-r.N. Got ${RELEASE_TAG}."
+              echo "js-cd.yml accepts std/vYYYY.MM.DD-r.N, js/vYYYY.MM.DD-r.N, or os/vYYYY.MM.DD-r.N. Got ${RELEASE_TAG}."
               exit 1
               ;;
           esac
@@ -69,6 +80,10 @@ jobs:
 
       - name: Refuse a stale ende.json
         run: bun run sync:ende -- --check
+
+      - name: Test the release planner
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: node --test eng/scripts/publish.test.mjs
 
       # A release tag runs every extra step. dev, plab-js-lib, and rt-<runtime> do too.
       - name: Install pinned Linux runtimes
@@ -197,55 +212,39 @@ jobs:
     timeout-minutes: 15
     environment: production
     permissions:
-      contents: write
+      contents: read
       id-token: write
-      packages: write
+    env:
+      CI: "true"
+      RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - name: Check out the release
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.ref }}
           fetch-depth: 0
+
+      - name: Verify the release checkout
+        run: node eng/scripts/check-release-ref.mjs
 
       - name: Set up Node 26.13.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26.13.0
-          registry-url: https://registry.npmjs.org
           package-manager-cache: false
-
-      - name: Install npm 11.5.1
-        run: npm install -g npm@11.5.1
 
       - name: Set up Deno 2.9.8
         uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: v2.9.8
 
-      - name: Refuse a package that still contains tests
-        run: node eng/scripts/check-publish.mjs
+      - name: Install pnpm 12.18.0
+        run: npm install -g pnpm@12.18.0
 
-      - name: Publish npm packages
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          maps=(std/npm/*/package.json)
-          if [ "${#maps[@]}" -eq 0 ]; then
-            echo "No std/npm packages yet. Nothing to publish."
-            exit 0
-          fi
-          for manifest in "${maps[@]}"; do
-            name="$(node -p "require('./${manifest}').name")"
-            version="$(node -p "require('./${manifest}').version")"
-            tag="latest"
-            case "$version" in
-              *-alpha.*) tag="alpha" ;;
-              *-beta.*) tag="beta" ;;
-              *-rc.*) tag="rc" ;;
-            esac
-            if npm view "${name}@${version}" version >/dev/null 2>&1; then
-              echo "Already on npmjs: ${name}@${version}"
-            else
-              npm publish --access public --tag "$tag" --provenance "$(dirname "$manifest")"
-            fi
-            npm publish --access public --tag "$tag" --registry https://npm.pkg.github.com "$(dirname "$manifest")" || echo "GitHub Packages publish skipped or already present: ${name}@${version}"
-          done
+      - name: Plan the release (no upload)
+        run: node eng/scripts/publish.mjs preflight
+
+      # Re-runs the plan so a version that appeared after preflight cannot be
+      # silently skipped by deno publish. Publishing stops at the first failure.
+      - name: Publish JSR and npm packages
+        run: node eng/scripts/publish.mjs publish

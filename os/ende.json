@@ -1,0 +1,7 @@
+{
+  "workspace": [
+    "./jsr/*",
+    "./npm/*"
+  ],
+  "nodeModulesDir": "auto"
+}
