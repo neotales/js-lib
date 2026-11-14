@@ -1,7 +1,9 @@
 # Publishing
 
 `js-cd.yml` publishes on a release tag. It is the only workflow that writes to a registry.
-There is no manual dispatch and no automated recovery path.
+There is no manual dispatch. A version that already exists is never overwritten: npm requires
+an exact tarball match to skip it, and an existing JSR version is logged and skipped because
+Deno publishes only unpublished versions. See [Existing versions](#existing-versions).
 
 ## Release ref guard
 
@@ -37,26 +39,40 @@ and orders the release. A tag does not change a version.
   `--no-provenance`, and no `--allow-dirty` — the same flags as the real publish;
 - runs `pnpm pack` for every npm twin and refuses a `workspace:` link, a test, or the harness;
 - reads the registry for every target version and rejects malformed JSR metadata;
+- records an existing JSR version as `skip-existing` instead of failing the plan;
 - requires every npm twin to have a JSR source at the same version;
 - orders both registries by the workspace dependency graph (`chars` before `slices`).
 
 The preflight does not upload. A dry run does not authenticate, so it does **not** prove that
 the trusted publisher accepts the workflow. Only a real publish exercises OIDC.
 
+A 404 from the JSR package metadata means the package is unpublished; a version missing from a
+200 `versions` object is an unpublished version. Both are planned for publish. A 200 response
+with `null`, malformed JSON, or a malformed `versions` object fails the plan. A network error or
+a non-404 HTTP error also fails the plan. None of those are turned into a skip.
+
 `node eng/scripts/publish.mjs publish` re-runs the plan and then uploads. It stops at the first
-failure. If Deno reports `Skipping, already published` or
-`Already uploaded, waiting for publishing`, the step fails: a version that appeared after the
-plan must not be reported as a successful publish.
+real failure.
 
 ## Existing versions
 
 - **npm:** the local `pnpm pack` tarball's sha512 is compared with the registry
   `dist.integrity`. A match is a verified skip. A missing or different integrity fails before
   any upload. A version that exists with other code must be bumped, not republished.
-- **JSR:** an existing version is a hard failure before any upload. A published JSR version
-  cannot be retried on the same tag. There is no automated recovery and no allowlist. Deno has
-  no local publish artifact that this repository can compare with a published version, so the
-  safe choice is to bump the version and tag a new release.
+- **JSR:** an existing version is logged and skipped. Deno publishes only unpublished versions,
+  so a rerun of the same tag does the same thing. The registry exposes no local artifact that
+  this repository can compare with the source, so the skip is **not** a content check. The tool
+  prints `not verified` and never claims that the published files are identical to the tree.
+  - If the source changed, bump the version. Skipping an existing version cannot publish new
+    code under the same version.
+  - If only a later package in the same area failed, rerunning the tag is safe: the earlier JSR
+    packages are skipped and the remaining ones publish.
+
+Deno 2.9.8 checks the registry before its expensive type check and skips an existing version
+with `Warning: Skipping, already published`. It can also report `Already uploaded, waiting for
+publishing` when another run is uploading the same version. The script treats both as a skip
+only when Deno exits zero. A non-zero exit is a real failure even when that message appears,
+because Deno keeps polling an in-flight upload and reports its failure.
 
 ## Partial releases
 
@@ -68,19 +84,18 @@ The first irreversible upload can still be followed by a failure. That is unavoi
   and exits zero; the package is published without a provenance badge.
 - A runner can lose the network after a registry accepts an upload.
 
-A rerun of the same tag is **not** a general recovery path:
+A rerun of the same tag is safe for versions that already exist:
 
-- If **no JSR package for the tag was published** and only npm is incomplete, fix the cause and
-  rerun the same tag. An existing npm version is skipped only when its tarball integrity matches
-  exactly; a different tarball fails.
-- If **any JSR package for the tag was published**, the same tag cannot be rerun. A new
-  `<area>/v*` release plans every publishable JSR package in that area, and each one that is
-  already published fails the plan. Bump the version of every already-published JSR package in
-  the area and its matching npm twin, run `bun run transpile`, commit, and create a new tag.
-- If JSR finished and npm failed, the same rule applies: do not bump only the npm package that
-  failed. Every JSR package in the new area release that is already published must be bumped,
-  with its matching npm twin.
-- Do not move, delete, or reuse the old tag. Do not unpublish or yank a version to force a rerun.
+- An existing JSR version is skipped with a note that its content was not verified.
+- An existing npm version is skipped only when its tarball integrity matches exactly; a different
+  tarball fails.
+- A later version that is still missing is published. Dependency order is unchanged.
+
+The limitation is content: if a JSR version exists but the source at the tag changed, the skip
+will not update it. Bump the version of any package whose content changed. The skip cannot detect
+that for you, because JSR publishes no artifact this repository can compare.
+
+Do not move, delete, or reuse the old tag. Do not unpublish or yank a version to force a rerun.
 
 ## npm and pnpm
 
@@ -181,6 +196,11 @@ pnpm --dir os/npm/is-elevated publish --dry-run --no-git-checks
 (cd std/jsr/slices && deno publish --dry-run)
 (cd os/jsr/is-elevated && deno publish --dry-run)
 ```
+
+A preflight where every version already exists exits 0: each existing JSR version prints
+`skip-existing` (content not verified), and each npm twin whose tarball integrity matches prints
+`verified-skip`. That is a successful no-op, not an upload. A preflight that cannot read JSR
+metadata exits non-zero and uploads nothing.
 
 `deno publish` refuses a working tree with untracked files. Use `--allow-dirty` only for a
 local packaging check, never for the release preflight.

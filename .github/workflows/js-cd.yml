@@ -6,8 +6,9 @@
 # name this repository, workflow js-cd.yml, and environment production. The
 # JSR package must be linked to neotales/js-lib. Neither is done by this file.
 # eng/scripts/publish.mjs preflights every package before the first upload. An
-# existing version is never skipped blindly: npm requires an exact tarball
-# match, and an existing JSR version is a hard failure. See docs/publishing.md.
+# existing npm version is skipped only on an exact tarball match; an existing
+# JSR version is logged and skipped because Deno publishes only unpublished
+# versions. See docs/publishing.md.
 name: js cd
 
 on:
@@ -244,7 +245,8 @@ jobs:
       - name: Plan the release (no upload)
         run: node eng/scripts/publish.mjs preflight
 
-      # Re-runs the plan so a version that appeared after preflight cannot be
-      # silently skipped by deno publish. Publishing stops at the first failure.
+      # Re-runs the plan. A version that appeared after preflight is logged as
+      # an unverified skip, not reported as a new upload; a real failure stops
+      # the run.
       - name: Publish JSR and npm packages
         run: node eng/scripts/publish.mjs publish

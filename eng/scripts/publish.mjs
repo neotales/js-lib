@@ -1,4 +1,4 @@
-// Plan and execute a js-lib release without ever blind-skipping a version.
+// Plan and execute a js-lib release.
 //
 // `preflight` does every check the publish step needs, including a
 // release-equivalent `deno publish --dry-run` for every JSR package and a
@@ -7,8 +7,13 @@
 //
 // `publish` runs the same plan again, then uploads in dependency order. An
 // existing npm version is skipped only after its exact tarball integrity
-// matches. An existing JSR version is a hard failure: there is no automated
-// recovery, because Deno has no local publish artifact to verify against.
+// matches. An existing JSR version is logged and skipped: Deno publishes only
+// unpublished versions, and there is no local publish artifact to compare with
+// what the registry holds. The skip therefore records a known limitation, not
+// a claim that the published content is identical. A version that appears
+// after the plan, or that Deno reports as already published or already in
+// progress with a zero exit, is skipped the same way. A non-zero exit, a
+// network error, or malformed metadata still fails closed.
 //
 // This is not an OIDC test. A dry run cannot prove that the trusted publisher
 // accepts the workflow; only a real publish can.
@@ -37,6 +42,8 @@ const JSR_ORIGIN = "https://jsr.io";
 const NPM_ORIGIN = "https://registry.npmjs.org";
 const JSR_HEADERS = { accept: "application/json" };
 const JSR_NOT_FOUND = Symbol("jsr-not-found");
+const JSR_SKIP_NOTE =
+  "JSR content is not verified; bump the version to change published code";
 
 // ---------------------------------------------------------------------------
 // Pure helpers (unit tested)
@@ -437,10 +444,10 @@ export async function buildPlan({
 
     const meta = await jsrPackageMeta(pkg.name, fetchImpl);
     if (versionInJsrMeta(meta, pkg.version)) {
-      errors.push(
-        `${pkg.name}@${pkg.version} already exists on JSR; automated recovery is not supported; bump the version`,
-      );
-      jsrPlan.push({ ...pkg, action: "blocked", files });
+      // Deno publishes only unpublished versions, and the registry exposes no
+      // artifact this script can compare with the local tree. Record the skip
+      // rather than fail, and never call it verified.
+      jsrPlan.push({ ...pkg, action: "skip-existing", files });
       continue;
     }
     jsrPlan.push({ ...pkg, action: "publish", files });
@@ -494,8 +501,37 @@ async function stillAbsent(pkg, fetchImpl) {
   return !versionInJsrMeta(meta, pkg.version);
 }
 
+export function denoPublishSkipKind(output) {
+  const text = String(output ?? "");
+  if (/All packages are already published/i.test(text)) {
+    return "all-already-published";
+  }
+  if (/Skipping, already published/i.test(text)) {
+    return "already-published";
+  }
+  if (/Already uploaded[,\s]+waiting for publishing/i.test(text)) {
+    return "in-progress";
+  }
+  return null;
+}
+
 export function denoPublishWasSkipped(output) {
-  return /already published|already uploaded[,\s]+waiting for publishing/i.test(output);
+  return denoPublishSkipKind(output) !== null;
+}
+
+function jsrSkipMessage(pkg, detail) {
+  return `skip existing jsr: ${pkg.name}@${pkg.version} (${detail}); ${JSR_SKIP_NOTE}`;
+}
+
+function normalizePublishResult(result) {
+  if (typeof result === "string") return { status: 0, output: result };
+  if (result && typeof result === "object") {
+    return {
+      status: Number.isInteger(result.status) ? result.status : 0,
+      output: typeof result.output === "string" ? result.output : "",
+    };
+  }
+  return { status: 0, output: String(result ?? "") };
 }
 
 function runDenoPublish(pkg) {
@@ -506,12 +542,11 @@ function runDenoPublish(pkg) {
   if (result.error) throw result.error;
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
-  if (result.status !== 0) {
-    throw new Error(
-      `deno publish failed for ${pkg.name}@${pkg.version} with exit ${result.status}`,
-    );
-  }
-  return `${result.stdout}\n${result.stderr}`;
+  return {
+    // A signal instead of an exit code is a failure, not a success.
+    status: result.status ?? 1,
+    output: `${result.stdout ?? ""}\n${result.stderr ?? ""}`,
+  };
 }
 
 export async function executePlan(plan, {
@@ -520,20 +555,33 @@ export async function executePlan(plan, {
   runNpm = run,
 } = {}) {
   for (const pkg of plan.jsr) {
+    if (pkg.action === "skip-existing") {
+      console.log(jsrSkipMessage(pkg, "present at preflight"));
+      continue;
+    }
     if (pkg.action !== "publish") {
       throw new Error(`${pkg.name}@${pkg.version} is blocked in the plan`);
     }
+    // A network error or malformed metadata here must stop the release before
+    // an upload; only a confirmed existing version is a skip.
     if (!(await stillAbsent(pkg, fetchImpl))) {
-      throw new Error(
-        `${pkg.name}@${pkg.version} appeared on JSR after the plan; re-run preflight`,
-      );
+      console.log(jsrSkipMessage(pkg, "appeared after the plan"));
+      continue;
     }
     console.log(`publishing ${pkg.name}@${pkg.version} to JSR`);
-    const output = runJsr(pkg);
-    if (denoPublishWasSkipped(output)) {
+    const result = normalizePublishResult(await runJsr(pkg));
+    if (result.status !== 0) {
+      // Deno keeps polling an in-flight duplicate and reports a real failure
+      // with a non-zero exit. That is not a skip even when the output contains
+      // "Already uploaded, waiting for publishing".
       throw new Error(
-        `${pkg.name}@${pkg.version}: deno publish reported an existing or duplicate upload; the plan is stale and no new version was uploaded`,
+        `${pkg.name}@${pkg.version}: deno publish failed with exit ${result.status}` +
+          (result.output.trim() ? `\n${result.output.trim()}` : ""),
       );
+    }
+    const skipKind = denoPublishSkipKind(result.output);
+    if (skipKind !== null) {
+      console.log(jsrSkipMessage(pkg, `deno publish reported ${skipKind}`));
     }
   }
 
@@ -556,7 +604,8 @@ export async function executePlan(plan, {
 
 export function printPlan(plan) {
   for (const pkg of plan.jsr) {
-    console.log(`jsr ${pkg.action}: ${pkg.name}@${pkg.version}`);
+    const note = pkg.action === "skip-existing" ? ` (${JSR_SKIP_NOTE})` : "";
+    console.log(`jsr ${pkg.action}: ${pkg.name}@${pkg.version}${note}`);
   }
   for (const pkg of plan.npm) {
     console.log(`npm ${pkg.action}: ${pkg.name}@${pkg.version} (${pkg.tag ?? "no tag"})`);
