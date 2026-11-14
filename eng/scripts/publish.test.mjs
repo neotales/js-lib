@@ -15,6 +15,7 @@ import {
   executePlan,
   jsrPackageMeta,
   sameNpmArtifact,
+  serializePlan,
   topoSort,
   versionInJsrMeta,
 } from "./publish.mjs";
@@ -158,6 +159,59 @@ test("sameNpmArtifact requires an exact sha512 and fails closed", () => {
   assert.equal(sameNpmArtifact(local, { integrity: "sha512-abc" }), true);
   assert.equal(sameNpmArtifact(local, { integrity: "sha512-xyz" }), false);
   assert.throws(() => sameNpmArtifact(local, {}), /dist.integrity/);
+});
+
+test("serializePlan exposes relative package directories and no temp tarballs", () => {
+  const root = "/tmp/js-lib-root";
+  const plan = {
+    areas: ["std"],
+    jsr: [
+      {
+        area: "std",
+        dir: "/tmp/js-lib-root/std/jsr/chars",
+        name: "@neotales/chars",
+        version: "0.1.0-alpha.0",
+        action: "publish",
+        files: ["/tmp/js-lib-root/std/jsr/chars/mod.ts"],
+      },
+    ],
+    npm: [
+      {
+        area: "std",
+        dir: "/tmp/js-lib-root/std/npm/chars",
+        name: "@neotales/chars",
+        version: "0.1.0-alpha.0",
+        action: "verified-skip",
+        tag: "alpha",
+        tarball: "/tmp/js-lib-publish-123/chars.tgz",
+        integrity: "sha512-abc",
+      },
+    ],
+    errors: [],
+  };
+  assert.deepEqual(serializePlan(plan, root), {
+    areas: ["std"],
+    jsr: [
+      {
+        area: "std",
+        dir: "std/jsr/chars",
+        name: "@neotales/chars",
+        version: "0.1.0-alpha.0",
+        action: "publish",
+      },
+    ],
+    npm: [
+      {
+        area: "std",
+        dir: "std/npm/chars",
+        name: "@neotales/chars",
+        version: "0.1.0-alpha.0",
+        action: "verified-skip",
+        tag: "alpha",
+      },
+    ],
+    errors: [],
+  });
 });
 
 test("checkVersionPairs requires a JSR source and the same version", () => {

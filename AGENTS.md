@@ -40,6 +40,13 @@ Test files are not part of a package. Every `jsr/*/deno.json` sets `publish.excl
 
 `js-cd.yml` publishes on a release tag. `std/v*` selects `std`, `os/v*` selects `os`, and `js/v*` keeps its existing `std` meaning. `eng/scripts/publish.mjs` preflights every package before the first upload with a release-equivalent `deno publish --dry-run`, then publishes in dependency order. npm publishes with `pnpm publish`, which rewrites `workspace:*`; `npm publish` does not. Both registries authenticate with GitHub Actions OIDC, not a token. npm requires an exact packed-tarball sha512 match to skip an existing version. An existing JSR version is logged and skipped, because Deno publishes only unpublished versions; the skip explicitly does not verify content, and a network error or malformed JSR metadata still fails closed. Unrecognized prereleases are rejected before upload. A release is a tag push; the ref guard verifies the checked-out HEAD is `github.sha`. Registry-side setup, recovery limits, and failure modes are in [docs/publishing.md](docs/publishing.md).
 
+`js-cd.yml` also generates `.build/release-notes.md` from the same preflight plan
+and the commit history. The notes are appended to the run's step summary and
+uploaded as an artifact. No GitHub Release is created, and the job keeps
+`contents: read`. The package table is the plan; a JSR skip is reported as a skip,
+not a shipment. Baseline choice, conventional types, scopes and the exact output
+files are in [docs/publishing.md](docs/publishing.md).
+
 `os/deno.json` is a nested Deno workspace with `nodeModulesDir: auto`, and `os/ende.json` is its synced copy. Deno does not read `os/pnpm-workspace.yaml`; without the file it tries to migrate it during `deno publish`, and the `is-elevated` type check fails on `@types/node`.
 
 ## Secrets

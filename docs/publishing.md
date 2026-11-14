@@ -54,6 +54,95 @@ a non-404 HTTP error also fails the plan. None of those are turned into a skip.
 `node eng/scripts/publish.mjs publish` re-runs the plan and then uploads. It stops at the first
 real failure.
 
+## Release notes
+
+The publish job generates release notes before the first upload. Nothing is
+created as a GitHub Release, and the job keeps `contents: read`.
+
+The files are deterministic and live in the ignored build directory:
+
+| File | Written by | Purpose |
+| --- | --- | --- |
+| `.build/release-plan.json` | `publish.mjs preflight --plan-json` | Package name, version, action and relative directory for every planned package |
+| `.build/release-notes.md` | `release-notes.mjs` | The markdown below, appended to `$GITHUB_STEP_SUMMARY` and uploaded as an artifact |
+
+In the monorepo the same files are under `js/lib/.build/`. The artifact is named
+`js-lib-release-notes-<run_id>-<run_attempt>`; the tag is in the file, not in the
+artifact name, because a tag contains `/`.
+
+The package table comes from the preflight plan, not from a second discovery
+pass. `publish` is the only action reported as scheduled to publish.
+`skip-existing` (JSR) and `verified-skip` (npm) are reported in a separate table
+with their limitation spelled out. A JSR skip is **not** a content check, and the
+notes say so. Plan errors stop the notes from scheduling anything. The notes are
+generated before the upload, so a publish failure does not erase the plan that
+was approved.
+
+The generator validates the plan before writing anything. Its expected package
+set comes from the publishable JSR and npm manifests discovered in the checkout,
+using the same discovery as `publish.mjs`; no package name is hardcoded here.
+`plan.areas` must be exactly the area selected by the tag. Every `jsr` and `npm`
+entry must carry that area, and its name, version, and canonical relative `dir`
+must match a discovered manifest. The plan must contain every discovered package
+exactly once: a missing package, an extra or fake package, a wrong version, a
+wrong directory, or a duplicate is rejected. A `std` plan passed to an `os` tag,
+or the reverse, is rejected too. Rejection is a non-zero exit before the output
+file, step summary, or artifact exists. That is deliberate: notes that present
+the wrong packages are worse than no notes.
+
+### Baseline and commit range
+
+The publish job checks out with `fetch-depth: 0`; without full tags and history
+the baseline is wrong or absent.
+
+- The baseline is the nearest reachable area tag with a shorter history, not the
+  tag with the newest name. The current tag is excluded. A second tag name on the
+  same commit is an alias and is also excluded, so a re-run of a tag does not
+  compare it against itself and produce empty notes.
+- `std` notes consider both `std/v*` and `js/v*`; `os` notes consider `os/v*`.
+  When two aliases are at the same commit, the current prefix wins the tie.
+- The first release has no previous tag. It uses the full reachable history
+  through `HEAD` and says so, instead of starting from a tag that does not exist
+  and producing an empty log.
+- Merge commits are omitted. A commit is included when it changes this area, or
+  when it changes a shared path (`eng/`, `docs/`, `.github/`, or a root
+  manifest). Shared changes affect both areas, so they appear in both notes.
+- A module label comes only from this area's paths. A commit that changes
+  `eng/` and `os/jsr/is-elevated` is labelled `area` in the `std` notes, not
+  `is-elevated`. A commit that changes both a `std` module and `eng/` is
+  labelled with the module and `area`.
+- A module comes from the paths a commit changed (`std/jsr/chars`,
+  `std/npm/chars`, `os/jsr/is-elevated`, and so on), not from its scope. A shared
+  path such as `docs/`, `eng/`, or `.github/` is labelled `area`.
+- A commit that appears twice is rendered once by full SHA.
+- When no commit touches the area, the notes say so explicitly instead of
+  presenting an empty section that reads as "nothing changed".
+
+### Conventional types and scopes
+
+The changelog is grouped by the conventional type, in this order: breaking,
+`feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`,
+`style`, `revert`, `import`, other. `feature` is normalized to `feat`. A `!`
+before the colon or a `breaking` type is listed under **Breaking changes**.
+
+Scopes such as `js-chars`, `js-slices`, `js-is-elevated`, and `js-lib` are shown
+on the line. The legacy import subjects use bare `chars`, `slices`, and
+`is-elevated`; those parse too. The scope is a label, not proof: if the commit
+did not change that module's paths, the line is labelled `area`. A non-conventional
+subject is still listed under **Other changes** with its scope omitted, because a
+missing line is worse than an uncategorised one. Non-conventional subjects use
+the same calculated module and `area` labels as conventional ones; they are not
+blanked to a generic area label.
+
+Commit text is untrusted. It never reaches a shell, `<`, `>`, `&`, backticks and
+table pipes are escaped, control characters are removed, and the script prints
+only the output path and counts to stdout. The step summary is a file, not a
+stdout workflow command.
+
+The script refuses to write notes for a tag that does not resolve to `HEAD`, or
+for a tag missing from the checkout, unless `--allow-missing-tag` is passed for a
+local preview. This repeats the release ref guard rather than assuming the ref.
+
 ## Existing versions
 
 - **npm:** the local `pnpm pack` tarball's sha512 is compared with the registry
@@ -187,8 +276,11 @@ Run from `js/lib` in a clean checkout of the tag. A local branch is not `dev`, s
 node eng/scripts/check-publish.mjs
 bun run sync:ende -- --check
 node --test eng/scripts/publish.test.mjs
-RELEASE_TAG=std/v2026.11.14-r.1 node eng/scripts/publish.mjs preflight
-RELEASE_TAG=os/v2026.11.14-r.1 node eng/scripts/publish.mjs preflight
+node --test eng/scripts/release-notes.test.mjs
+RELEASE_TAG=std/v2026.11.14-r.1 node eng/scripts/publish.mjs preflight --plan-json .build/release-plan-std.json
+RELEASE_TAG=os/v2026.11.14-r.1 node eng/scripts/publish.mjs preflight --plan-json .build/release-plan-os.json
+RELEASE_TAG=std/v2026.11.14-r.1 node eng/scripts/release-notes.mjs --plan .build/release-plan-std.json --output .build/release-notes-std.md --allow-missing-tag
+RELEASE_TAG=os/v2026.11.14-r.1 node eng/scripts/release-notes.mjs --plan .build/release-plan-os.json --output .build/release-notes-os.md --allow-missing-tag
 pnpm --dir std/npm/chars publish --dry-run --no-git-checks
 pnpm --dir std/npm/slices publish --dry-run --no-git-checks
 pnpm --dir os/npm/is-elevated publish --dry-run --no-git-checks

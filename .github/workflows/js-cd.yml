@@ -86,6 +86,10 @@ jobs:
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: node --test eng/scripts/publish.test.mjs
 
+      - name: Test release notes
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: node --test eng/scripts/release-notes.test.mjs
+
       # A release tag runs every extra step. dev, plab-js-lib, and rt-<runtime> do too.
       - name: Install pinned Linux runtimes
         if: >-
@@ -243,7 +247,20 @@ jobs:
         run: npm install -g pnpm@12.18.0
 
       - name: Plan the release (no upload)
-        run: node eng/scripts/publish.mjs preflight
+        run: node eng/scripts/publish.mjs preflight --plan-json .build/release-plan.json
+
+      # The plan is the source of the package table. Notes are generated before
+      # the upload, and a skip is reported as a skip rather than a shipment.
+      - name: Generate release notes
+        run: node eng/scripts/release-notes.mjs --plan .build/release-plan.json --output .build/release-notes.md
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: js-lib-release-notes-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .build/release-notes.md
+          if-no-files-found: error
+          retention-days: 30
 
       # Re-runs the plan. A version that appeared after preflight is logged as
       # an unverified skip, not reported as a new upload; a real failure stops

@@ -27,6 +27,7 @@ import {
   readdirSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -192,6 +193,13 @@ function isDirectory(path) {
   } catch {
     return false;
   }
+}
+
+// Release notes validate a plan against the manifests in the checkout. The
+// same discovery keeps both sides from drifting: a name or directory that the
+// publisher would not discover is not a package in this release.
+export function discoverPackages(root, areas) {
+  return discover(root, areas);
 }
 
 function jsrDependencies(packageInfo, byName) {
@@ -602,6 +610,36 @@ export async function executePlan(plan, {
   }
 }
 
+// A stable view of the plan for another step. It deliberately leaves out
+// absolute paths and temporary tarballs: preflight deletes that directory, and
+// release notes must not depend on a path that no longer exists.
+export function serializePlan(plan, root) {
+  const pathOf = (pkg) => {
+    if (!pkg.dir) return null;
+    const path = relative(root, pkg.dir).split(sep).join("/");
+    return path.startsWith("..") ? null : path;
+  };
+  return {
+    areas: [...plan.areas],
+    jsr: plan.jsr.map((pkg) => ({
+      area: pkg.area,
+      dir: pathOf(pkg),
+      name: pkg.name,
+      version: pkg.version,
+      action: pkg.action,
+    })),
+    npm: plan.npm.map((pkg) => ({
+      area: pkg.area,
+      dir: pathOf(pkg),
+      name: pkg.name,
+      version: pkg.version,
+      action: pkg.action,
+      tag: pkg.tag ?? null,
+    })),
+    errors: [...plan.errors],
+  };
+}
+
 export function printPlan(plan) {
   for (const pkg of plan.jsr) {
     const note = pkg.action === "skip-existing" ? ` (${JSR_SKIP_NOTE})` : "";
@@ -616,12 +654,29 @@ export function printPlan(plan) {
   }
 }
 
-async function main() {
-  const mode = process.argv[2];
-  if (mode !== "preflight" && mode !== "publish") {
-    console.error("usage: node eng/scripts/publish.mjs <preflight|publish>");
-    process.exit(2);
+function parseArgs(argv) {
+  let mode = null;
+  let planJson = null;
+  for (let index = 0; index < argv.length; index++) {
+    const arg = argv[index];
+    if (arg === "preflight" || arg === "publish") {
+      if (mode !== null) throw new Error(`mode given twice: ${mode} and ${arg}`);
+      mode = arg;
+      continue;
+    }
+    if (arg === "--plan-json") {
+      planJson = argv[++index];
+      if (!planJson) throw new Error("--plan-json needs a path");
+      continue;
+    }
+    throw new Error(`unknown argument ${arg}`);
   }
+  if (mode === null) throw new Error("mode must be preflight or publish");
+  return { mode, planJson };
+}
+
+async function main() {
+  const { mode, planJson } = parseArgs(process.argv.slice(2));
 
   const root = satelliteRoot();
   const areas = areasForTag(process.env.RELEASE_TAG ?? "");
@@ -629,6 +684,13 @@ async function main() {
   try {
     const plan = await buildPlan({ root, areas, tempRoot });
     printPlan(plan);
+    if (planJson) {
+      mkdirSync(dirname(planJson), { recursive: true });
+      writeFileSync(
+        planJson,
+        `${JSON.stringify(serializePlan(plan, root), null, 2)}\n`,
+      );
+    }
     if (plan.errors.length > 0) {
       process.exitCode = 1;
       return;
