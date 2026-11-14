@@ -1,0 +1,4 @@
+# npm packages for the std area. A sibling is a workspace link, not a published version.
+packages:
+  - "npm/*"
+publishBranch: dev

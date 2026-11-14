@@ -1,0 +1,263 @@
+# Test os. Publishing is js-cd.yml. Action pin checks are js-check-actions.yml.
+name: js-os-ci
+
+on:
+  push:
+    paths:
+      - "os/**"
+      - "eng/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "deno.json"
+      - "ende.json"
+      - "docs/**"
+      - ".github/workflows/js-os-ci.yml"
+      - ".github/workflows/js-cd.yml"
+  pull_request:
+    paths:
+      - "os/**"
+      - "eng/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "deno.json"
+      - "ende.json"
+      - "docs/**"
+      - ".github/workflows/js-os-ci.yml"
+      - ".github/workflows/js-cd.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: js-os-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ci (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Bun 1.4.4
+        if: ${{ !cancelled() }}
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      - name: Set up Node 26.13.0
+        if: ${{ !cancelled() }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26.13.0
+          package-manager-cache: false
+
+      - name: Set up Deno 2.9.8
+        if: ${{ !cancelled() }}
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.8
+
+      - name: Refuse a package that still contains tests
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: node eng/scripts/check-publish.mjs
+
+      - name: Refuse a stale ende.json
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: bun run sync:ende -- --check
+
+      - name: Test suite discovery
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: node --test eng/scripts/test-discovery.test.mjs
+
+      # dev, plab-js-lib, and rt-<runtime>. A pull request uses head_ref.
+      - name: Install pinned Linux runtimes
+        if: >-
+          !cancelled() &&
+          matrix.os == 'ubuntu-24.04' &&
+          (
+            github.ref_name == 'dev' || github.head_ref == 'dev' ||
+            github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
+            github.ref_name == 'rt-ende' || github.head_ref == 'rt-ende' ||
+            github.ref_name == 'rt-quickjs' || github.head_ref == 'rt-quickjs' ||
+            github.ref_name == 'rt-workerd' || github.head_ref == 'rt-workerd' ||
+            github.ref_name == 'rt-clearscript' || github.head_ref == 'rt-clearscript'
+          )
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          version: 2026.11.3
+          mise_toml: |
+            [tools]
+            workerd = "1.20261109.1"
+            dotnet = "11.0.100-rc.2.26504.105"
+            "github:quickjs-ng/quickjs" = { version = "0.18.0", asset_pattern = "qjs-linux-x86_64", bin = "qjs-linux-x86_64" }
+            "github:theende/ende" = { version = "2026.11.06", asset_pattern = "ende-x86_64-unknown-linux-gnu.zip", bin = "ende" }
+
+      - name: Install pinned txiki.js 26.11.0
+        if: >-
+          !cancelled() &&
+          matrix.os != 'ubuntu-24.04' &&
+          (
+            github.ref_name == 'dev' || github.head_ref == 'dev' ||
+            github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
+            github.ref_name == 'rt-txiki' || github.head_ref == 'rt-txiki'
+          )
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          version: 2026.11.3
+          mise_toml: |
+            [tools."github:saghul/txiki.js"]
+            version = "26.11.0"
+            [tools."github:saghul/txiki.js".platforms]
+            macos-arm64 = { asset_pattern = "txiki-macos-arm64.zip", strip_components = 1, bin = "tjs" }
+            macos-x64 = { asset_pattern = "txiki-macos-x86_64.zip", strip_components = 1, bin = "tjs" }
+            windows-x64 = { asset_pattern = "txiki-windows-x86_64.zip", strip_components = 1, bin = "tjs.exe" }
+
+      # Each lane writes under .build/<lane>, so these can share the runner.
+      - parallel:
+          - name: Test on Bun
+            if: ${{ !cancelled() }}
+            run: bun run test -- os/is-elevated
+
+          - name: Test on Deno
+            if: ${{ !cancelled() }}
+            run: bun run test:deno -- os/is-elevated
+
+          - name: Test on Ende
+            if: >-
+              !cancelled() &&
+              matrix.os == 'ubuntu-24.04' &&
+              (
+                github.ref_name == 'dev' || github.head_ref == 'dev' ||
+                github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
+                github.ref_name == 'rt-ende' || github.head_ref == 'rt-ende'
+              )
+            run: bun run test:ende -- os/is-elevated
+
+          - name: Test on QuickJS-ng
+            if: >-
+              !cancelled() &&
+              matrix.os == 'ubuntu-24.04' &&
+              (
+                github.ref_name == 'dev' || github.head_ref == 'dev' ||
+                github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
+                github.ref_name == 'rt-quickjs' || github.head_ref == 'rt-quickjs'
+              )
+            run: bun run test:quickjs -- os/is-elevated
+
+          - name: Test on workerd
+            if: >-
+              !cancelled() &&
+              matrix.os == 'ubuntu-24.04' &&
+              (
+                github.ref_name == 'dev' || github.head_ref == 'dev' ||
+                github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
+                github.ref_name == 'rt-workerd' || github.head_ref == 'rt-workerd'
+              )
+            run: bun run test:workerd -- os/is-elevated
+
+          - name: Test on ClearScript
+            if: >-
+              !cancelled() &&
+              matrix.os == 'ubuntu-24.04' &&
+              (
+                github.ref_name == 'dev' || github.head_ref == 'dev' ||
+                github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
+                github.ref_name == 'rt-clearscript' || github.head_ref == 'rt-clearscript'
+              )
+            run: bun run test:clearscript -- os/is-elevated
+
+          - name: Test on txiki.js
+            if: >-
+              !cancelled() &&
+              matrix.os != 'ubuntu-24.04' &&
+              (
+                github.ref_name == 'dev' || github.head_ref == 'dev' ||
+                github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
+                github.ref_name == 'rt-txiki' || github.head_ref == 'rt-txiki'
+              )
+            shell: bash
+            run: bun run test:txiki -- os/is-elevated
+
+      # koffi is the optional dependency of @neotales/is-elevated. Install it for
+      # this runner only; it stays out of package.json and the lockfile. npm
+      # blocks dependency install scripts until approved, and without its script
+      # the native addon is missing, so approve and run that script.
+      - name: Install koffi when it does not load
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          if ! node -e 'require("koffi")'; then
+            npm install --no-save --package-lock=false koffi@^2.9.0
+          fi
+          npm install-scripts approve koffi
+          npm rebuild koffi --foreground-scripts
+          node -e 'require("koffi")'
+
+      - name: Test on Node FFI
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          NODE_OPTIONS: --experimental-ffi
+          REQUIRE_NODE_FFI: "1"
+        run: |
+          node --experimental-ffi -e 'require("node:ffi")'
+          bun run test:node -- os/is-elevated
+
+      - name: Test on Node koffi
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          # Node 26 enables node:ffi by default. Turn it off so this leg really
+          # takes the koffi fallback and the guard below can pass.
+          NODE_OPTIONS: --no-experimental-ffi
+          REQUIRE_KOFFI: "1"
+        run: |
+          if node -e 'require("node:ffi")'; then
+            echo "::error::koffi leg has node:ffi, so the tests would not take the fallback"
+            exit 1
+          fi
+          node -e 'require("koffi")'
+          bun run test:node -- os/is-elevated
+
+  browser:
+    name: browser (${{ matrix.browser }})
+    if: >-
+      github.ref_name == 'dev' || github.head_ref == 'dev' ||
+      github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
+      github.ref_name == 'rt-firefox' || github.head_ref == 'rt-firefox' ||
+      github.ref_name == 'rt-webkit' || github.head_ref == 'rt-webkit'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [firefox, webkit]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26.13.0
+          package-manager-cache: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.18.0
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps ${{ matrix.browser }}
+      - name: Test browser harness
+        env:
+          REQUIRE_BROWSER_LANES: "1"
+          BROWSER_LANE: ${{ matrix.browser }}
+        run: node --test eng/scripts/browser-harness.test.mjs
+      - name: Test on ${{ matrix.browser }}
+        run: bun run test:${{ matrix.browser }} -- os/is-elevated

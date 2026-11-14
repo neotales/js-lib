@@ -1,0 +1,233 @@
+{
+  "name": "@neotales/chars",
+  "version": "0.1.0-alpha.0",
+  "keywords": [
+    "chars",
+    "deno",
+    "node",
+    "bun",
+    "ende",
+    "quickjs-ng",
+    "workerd",
+    "txiki",
+    "clearscript",
+    "browsers",
+    "jerryscript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neotales/js-lib.git",
+    "directory": "std/npm/chars"
+  },
+  "license": "MIT",
+  "module": "./esm/mod.js",
+  "types": "./types/mod.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      },
+      "default": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      }
+    },
+    "./all": {
+      "import": {
+        "types": "./types/all.d.ts",
+        "default": "./esm/all.js"
+      },
+      "default": {
+        "types": "./types/all.d.ts",
+        "default": "./esm/all.js"
+      }
+    },
+    "./constants": {
+      "import": {
+        "types": "./types/constants.d.ts",
+        "default": "./esm/constants.js"
+      },
+      "default": {
+        "types": "./types/constants.d.ts",
+        "default": "./esm/constants.js"
+      }
+    },
+    "./equal-fold": {
+      "import": {
+        "types": "./types/equal_fold.d.ts",
+        "default": "./esm/equal_fold.js"
+      },
+      "default": {
+        "types": "./types/equal_fold.d.ts",
+        "default": "./esm/equal_fold.js"
+      }
+    },
+    "./is-ascii": {
+      "import": {
+        "types": "./types/is_ascii.d.ts",
+        "default": "./esm/is_ascii.js"
+      },
+      "default": {
+        "types": "./types/is_ascii.d.ts",
+        "default": "./esm/is_ascii.js"
+      }
+    },
+    "./is-char": {
+      "import": {
+        "types": "./types/is_char.d.ts",
+        "default": "./esm/is_char.js"
+      },
+      "default": {
+        "types": "./types/is_char.d.ts",
+        "default": "./esm/is_char.js"
+      }
+    },
+    "./is-control": {
+      "import": {
+        "types": "./types/is_control.d.ts",
+        "default": "./esm/is_control.js"
+      },
+      "default": {
+        "types": "./types/is_control.d.ts",
+        "default": "./esm/is_control.js"
+      }
+    },
+    "./is-digit": {
+      "import": {
+        "types": "./types/is_digit.d.ts",
+        "default": "./esm/is_digit.js"
+      },
+      "default": {
+        "types": "./types/is_digit.d.ts",
+        "default": "./esm/is_digit.js"
+      }
+    },
+    "./is-latin1": {
+      "import": {
+        "types": "./types/is_latin1.d.ts",
+        "default": "./esm/is_latin1.js"
+      },
+      "default": {
+        "types": "./types/is_latin1.d.ts",
+        "default": "./esm/is_latin1.js"
+      }
+    },
+    "./is-letter-or-digit": {
+      "import": {
+        "types": "./types/is_letter_or_digit.d.ts",
+        "default": "./esm/is_letter_or_digit.js"
+      },
+      "default": {
+        "types": "./types/is_letter_or_digit.d.ts",
+        "default": "./esm/is_letter_or_digit.js"
+      }
+    },
+    "./is-letter": {
+      "import": {
+        "types": "./types/is_letter.d.ts",
+        "default": "./esm/is_letter.js"
+      },
+      "default": {
+        "types": "./types/is_letter.d.ts",
+        "default": "./esm/is_letter.js"
+      }
+    },
+    "./is-lower": {
+      "import": {
+        "types": "./types/is_lower.d.ts",
+        "default": "./esm/is_lower.js"
+      },
+      "default": {
+        "types": "./types/is_lower.d.ts",
+        "default": "./esm/is_lower.js"
+      }
+    },
+    "./is-punc": {
+      "import": {
+        "types": "./types/is_punc.d.ts",
+        "default": "./esm/is_punc.js"
+      },
+      "default": {
+        "types": "./types/is_punc.d.ts",
+        "default": "./esm/is_punc.js"
+      }
+    },
+    "./is-space": {
+      "import": {
+        "types": "./types/is_space.d.ts",
+        "default": "./esm/is_space.js"
+      },
+      "default": {
+        "types": "./types/is_space.d.ts",
+        "default": "./esm/is_space.js"
+      }
+    },
+    "./is-symbol": {
+      "import": {
+        "types": "./types/is_symbol.d.ts",
+        "default": "./esm/is_symbol.js"
+      },
+      "default": {
+        "types": "./types/is_symbol.d.ts",
+        "default": "./esm/is_symbol.js"
+      }
+    },
+    "./is-upper": {
+      "import": {
+        "types": "./types/is_upper.d.ts",
+        "default": "./esm/is_upper.js"
+      },
+      "default": {
+        "types": "./types/is_upper.d.ts",
+        "default": "./esm/is_upper.js"
+      }
+    },
+    "./simple-fold": {
+      "import": {
+        "types": "./types/simple_fold.d.ts",
+        "default": "./esm/simple_fold.js"
+      },
+      "default": {
+        "types": "./types/simple_fold.d.ts",
+        "default": "./esm/simple_fold.js"
+      }
+    },
+    "./to-lower": {
+      "import": {
+        "types": "./types/to_lower.d.ts",
+        "default": "./esm/to_lower.js"
+      },
+      "default": {
+        "types": "./types/to_lower.d.ts",
+        "default": "./esm/to_lower.js"
+      }
+    },
+    "./to-upper": {
+      "import": {
+        "types": "./types/to_upper.d.ts",
+        "default": "./esm/to_upper.js"
+      },
+      "default": {
+        "types": "./types/to_upper.d.ts",
+        "default": "./esm/to_upper.js"
+      }
+    },
+    "./types": {
+      "import": {
+        "types": "./types/types.d.ts",
+        "default": "./esm/types.js"
+      },
+      "default": {
+        "types": "./types/types.d.ts",
+        "default": "./esm/types.js"
+      }
+    }
+  },
+  "scripts": {},
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "_generatedBy": "dnt@0.44.0"
+}

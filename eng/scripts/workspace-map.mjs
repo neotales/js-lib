@@ -103,7 +103,7 @@ export function isTestFile(path) {
 }
 
 export function isHarnessFile(path) {
-  return /\/test\/(?:run|assert|main)\.[cm]?[jt]s$/.test(path.split("\\").join("/"));
+  return /\/(?:test|assert)\/(?:mod|run|assert|main)\.[cm]?[jt]s$/.test(path.split("\\").join("/")) || /\/test\/(?:run|assert|main)\.[cm]?[jt]s$/.test(path.split("\\").join("/"));
 }
 
 function mapSpecifier(spec, fromFile, workspace, extension) {

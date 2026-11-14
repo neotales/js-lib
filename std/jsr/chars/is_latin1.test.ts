@@ -1,5 +1,5 @@
-import { test } from "../../../test/run.ts";
-import { ok } from "../../../test/assert.ts";
+import { test } from "@neotales/test";
+import { ok } from "@neotales/assert";
 import { isLatin1, isLatin1At } from "./is_latin1.ts";
 
 test("chars::isLatin1", () => {

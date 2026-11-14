@@ -9,17 +9,17 @@
  * Cyrillic or Greek characters. The chars library is heavily based on golang's
  * unicode module.
  *
- * ![logo](https://raw.githubusercontent.com/neotales/js-libraries/refs/heads/dev/eng/assets/logo.png)
+ * ![logo](https://raw.githubusercontent.com/neotales/js-lib/refs/heads/dev/eng/assets/logo.png)
  *
  * [![JSR](https://jsr.io/badges/@neotales/chars)](https://jsr.io/@neotales/chars)
  * [![npm version](https://badge.fury.io/js/@neotales%2Fchars.svg)](https://badge.fury.io/js/@neotales%2Fchars)
- * [![GitHub version](https://badge.fury.io/gh/neotales%2Fjs-std.svg)](https://badge.fury.io/gh/neotales%2Fjs-std)
+ * [![GitHub version](https://badge.fury.io/gh/neotales%2Fjs-lib.svg)](https://badge.fury.io/gh/neotales%2Fjs-lib)
  *
  * ## Documentation
  *
  * Documentation is available on [jsr.io](https://jsr.io/@neotales/chars/doc)
  *
- * A list of other modules can be found at [github.com/neotales/js-libraries](https://github.com/neotales/js-libraries)
+ * A list of other modules can be found at [github.com/neotales/js-lib](https://github.com/neotales/js-lib)
  *
  * ## Installation
  *

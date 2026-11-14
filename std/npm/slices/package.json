@@ -1,0 +1,226 @@
+{
+  "name": "@neotales/slices",
+  "version": "0.1.0-alpha.0",
+  "keywords": [
+    "slices",
+    "deno",
+    "node",
+    "bun",
+    "ende",
+    "quickjs-ng",
+    "workerd",
+    "txiki",
+    "clearscript",
+    "browsers",
+    "jerryscript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neotales/js-lib.git",
+    "directory": "std/npm/slices"
+  },
+  "license": "MIT",
+  "module": "./esm/mod.js",
+  "types": "./types/mod.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      },
+      "default": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      }
+    },
+    "./camelize": {
+      "import": {
+        "types": "./types/camelize.d.ts",
+        "default": "./esm/camelize.js"
+      },
+      "default": {
+        "types": "./types/camelize.d.ts",
+        "default": "./esm/camelize.js"
+      }
+    },
+    "./capitalize": {
+      "import": {
+        "types": "./types/capitalize.d.ts",
+        "default": "./esm/capitalize.js"
+      },
+      "default": {
+        "types": "./types/capitalize.d.ts",
+        "default": "./esm/capitalize.js"
+      }
+    },
+    "./char-array-builder": {
+      "import": {
+        "types": "./types/char_array_builder.d.ts",
+        "default": "./esm/char_array_builder.js"
+      },
+      "default": {
+        "types": "./types/char_array_builder.d.ts",
+        "default": "./esm/char_array_builder.js"
+      }
+    },
+    "./char-slice": {
+      "import": {
+        "types": "./types/char_slice.d.ts",
+        "default": "./esm/char_slice.js"
+      },
+      "default": {
+        "types": "./types/char_slice.d.ts",
+        "default": "./esm/char_slice.js"
+      }
+    },
+    "./dasherize": {
+      "import": {
+        "types": "./types/dasherize.d.ts",
+        "default": "./esm/dasherize.js"
+      },
+      "default": {
+        "types": "./types/dasherize.d.ts",
+        "default": "./esm/dasherize.js"
+      }
+    },
+    "./ends-with": {
+      "import": {
+        "types": "./types/ends_with.d.ts",
+        "default": "./esm/ends_with.js"
+      },
+      "default": {
+        "types": "./types/ends_with.d.ts",
+        "default": "./esm/ends_with.js"
+      }
+    },
+    "./equal": {
+      "import": {
+        "types": "./types/equal.d.ts",
+        "default": "./esm/equal.js"
+      },
+      "default": {
+        "types": "./types/equal.d.ts",
+        "default": "./esm/equal.js"
+      }
+    },
+    "./index-of": {
+      "import": {
+        "types": "./types/index_of.d.ts",
+        "default": "./esm/index_of.js"
+      },
+      "default": {
+        "types": "./types/index_of.d.ts",
+        "default": "./esm/index_of.js"
+      }
+    },
+    "./last-index-of": {
+      "import": {
+        "types": "./types/last_index_of.d.ts",
+        "default": "./esm/last_index_of.js"
+      },
+      "default": {
+        "types": "./types/last_index_of.d.ts",
+        "default": "./esm/last_index_of.js"
+      }
+    },
+    "./ordinalize": {
+      "import": {
+        "types": "./types/ordinalize.d.ts",
+        "default": "./esm/ordinalize.js"
+      },
+      "default": {
+        "types": "./types/ordinalize.d.ts",
+        "default": "./esm/ordinalize.js"
+      }
+    },
+    "./pascalize": {
+      "import": {
+        "types": "./types/pascalize.d.ts",
+        "default": "./esm/pascalize.js"
+      },
+      "default": {
+        "types": "./types/pascalize.d.ts",
+        "default": "./esm/pascalize.js"
+      }
+    },
+    "./slice": {
+      "import": {
+        "types": "./types/slice.d.ts",
+        "default": "./esm/slice.js"
+      },
+      "default": {
+        "types": "./types/slice.d.ts",
+        "default": "./esm/slice.js"
+      }
+    },
+    "./starts-with": {
+      "import": {
+        "types": "./types/starts_with.d.ts",
+        "default": "./esm/starts_with.js"
+      },
+      "default": {
+        "types": "./types/starts_with.d.ts",
+        "default": "./esm/starts_with.js"
+      }
+    },
+    "./titleize": {
+      "import": {
+        "types": "./types/titleize.d.ts",
+        "default": "./esm/titleize.js"
+      },
+      "default": {
+        "types": "./types/titleize.d.ts",
+        "default": "./esm/titleize.js"
+      }
+    },
+    "./tokens": {
+      "import": {
+        "types": "./types/tokens.d.ts",
+        "default": "./esm/tokens.js"
+      },
+      "default": {
+        "types": "./types/tokens.d.ts",
+        "default": "./esm/tokens.js"
+      }
+    },
+    "./trim": {
+      "import": {
+        "types": "./types/trim.d.ts",
+        "default": "./esm/trim.js"
+      },
+      "default": {
+        "types": "./types/trim.d.ts",
+        "default": "./esm/trim.js"
+      }
+    },
+    "./underscore": {
+      "import": {
+        "types": "./types/underscore.d.ts",
+        "default": "./esm/underscore.js"
+      },
+      "default": {
+        "types": "./types/underscore.d.ts",
+        "default": "./esm/underscore.js"
+      }
+    },
+    "./utils": {
+      "import": {
+        "types": "./types/utils.d.ts",
+        "default": "./esm/utils.js"
+      },
+      "default": {
+        "types": "./types/utils.d.ts",
+        "default": "./esm/utils.js"
+      }
+    }
+  },
+  "scripts": {},
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@neotales/chars": "workspace:*"
+  },
+  "_generatedBy": "dnt@0.44.0"
+}

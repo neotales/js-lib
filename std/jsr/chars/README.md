@@ -9,34 +9,16 @@ The module will handle characters outside latin and ascii such as
 Cyrillic or Greek characters. The chars library is heavily based on golang's
 unicode module.
 
-![logo](https://raw.githubusercontent.com/neotales/js-libraries/refs/heads/dev/eng/assets/logo.png)
+![logo](https://raw.githubusercontent.com/neotales/js-lib/refs/heads/dev/eng/assets/logo.png)
 
 [![JSR](https://jsr.io/badges/@neotales/chars)](https://jsr.io/@neotales/chars)
 [![npm version](https://badge.fury.io/js/@neotales%2Fchars.svg?icon=si%3Anpm)](https://badge.fury.io/js/@neotales%2Fchars)
-
-<!-- runtime-support:begin -->
-
-## Runtime support
-
-Generated from `runtimes.json`. Run `deno task readme` after changing it.
-
-| Capability | Deno | Node.js | Bun | Chromium | Cloudflare Workers | QuickJS-ng | txiki.js | JerryScript | ClearScript |
-| ---------- | ---- | ------- | --- | -------- | ------------------ | ---------- | -------- | ----------- | ----------- |
-| Supported  | Yes  | Yes     | Yes | Yes      | Yes                | Yes        | Yes      | Yes         | Yes         |
-
-Pure character handling. Runs everywhere.
-
-Yes = full support, Partial = usable subset, No = not supported.
-
-How each column is established -- Deno: tested per module by the group's own test matrix, on every push; Node.js, Bun: tested per module against the generated npm package, on every push; Chromium, Cloudflare Workers: **no automated coverage**; an end-to-end suite exists but no CI job runs it; QuickJS-ng, txiki.js, JerryScript, ClearScript: **asserted**; verified only by the conformance lab, which nothing here runs.
-
-<!-- runtime-support:end -->
 
 ## Documentation
 
 Documentation is available on [jsr.io](https://jsr.io/@neotales/chars/doc)
 
-A list of other modules can be found at [github.com/neotales/js-libraries](https://github.com/neotales/js-libraries)
+[Module list](https://github.com/neotales/js-lib).
 
 ## Installation
 
@@ -50,6 +32,25 @@ npx jsr add @neotales/chars
 # from npmjs.org
 npm install @neotales/chars
 ```
+
+### Runtime support
+
+The module README table is the support claim.
+
+| Runtime | Supported | Generated from the TypeScript |
+| --- | --- | --- |
+| Deno | ✅ | source |
+| Node.js | ✅ | published npm ESM twin (node >= 22) |
+| Bun | ✅ | source; Bun rewrites @neotales/ imports to relative paths |
+| Ende | ✅ | source |
+| QuickJS-ng | ✅ | one ESM bundle |
+| workerd | ✅ | one ESM bundle, imported from the worker |
+| txiki.js | ✅ | one ESM bundle, run with `tjs run` |
+| ClearScript | ✅ | TypeScript graph transpiled to .js, then loaded by the host |
+| browsers | ✅ | one ESM bundle, no syntax rewrite |
+| JerryScript | ✅ | IIFE, ES2020 pass, then console mapped to print; no private fields, so syntax is unchanged |
+
+Load instructions: [runtime documentation](../../../docs/README.md).
 
 ## Usage
 

@@ -1,0 +1,7 @@
+{
+  "name": "@neotales/assert",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "publish": false
+}

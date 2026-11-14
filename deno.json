@@ -1,5 +1,6 @@
 {
   "workspace": [
-    "./std/jsr/*"
+    "./std/jsr/*",
+    "./os/jsr/*"
   ]
 }

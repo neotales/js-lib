@@ -81,6 +81,7 @@ function checkWorkspaceMap() {
 function checkJsr(manifest) {
   const dir = dirname(manifest);
   const json = JSON.parse(readFileSync(manifest, "utf8"));
+  if (json.publish === false) return;
   const exclude = json.publish?.exclude ?? [];
   for (const pattern of requiredExclude) {
     if (!exclude.includes(pattern)) fail(`${manifest}: publish.exclude is missing ${pattern}`);
@@ -110,8 +111,8 @@ function checkJsr(manifest) {
 
 function checkNpm(manifest) {
   const text = readFileSync(manifest, "utf8");
-  if (text.includes("workspace:")) {
-    fail(`${manifest}: contains workspace:. npm publish does not rewrite it`);
+  if (/workspace:(?!\*)/.test(text)) {
+    fail(`${manifest}: contains a workspace: link other than workspace:*. pnpm rewrites only that form`);
   }
   for (const path of packFiles(dirname(manifest))) {
     if (isTestFile(path) || isHarnessFile(path) || isEndeConfig(path)) {
@@ -183,13 +184,14 @@ function packFiles(dir) {
     fail(`npm pack --dry-run failed in ${dir}\n${result.stderr}`);
     return [];
   }
-  const start = result.stdout.indexOf("[");
+  const start = result.stdout.search(/[\[{]/);
   if (start < 0) {
     fail(`npm pack --dry-run did not print JSON in ${dir}`);
     return [];
   }
   const parsed = JSON.parse(result.stdout.slice(start));
-  return (parsed[0]?.files ?? []).map((file) => file.path);
+  const packed = Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0];
+  return (packed?.files ?? []).map((file) => file.path);
 }
 
 function jsrPackages() {

@@ -1,5 +1,5 @@
-import { test } from "../../../test/run.ts";
-import { deepStrictEqual as equal } from "../../../test/assert.ts";
+import { test } from "@neotales/test";
+import { deepStrictEqual as equal } from "@neotales/assert";
 import { toUpper } from "./to_upper.ts";
 
 test("chars::toUpper", () => {

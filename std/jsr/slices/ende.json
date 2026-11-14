@@ -1,0 +1,52 @@
+{
+  "name": "@neotales/slices",
+  "version": "0.1.0-alpha.0",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./camelize": "./camelize.ts",
+    "./capitalize": "./capitalize.ts",
+    "./char-array-builder": "./char_array_builder.ts",
+    "./char-slice": "./char_slice.ts",
+    "./dasherize": "./dasherize.ts",
+    "./ends-with": "./ends_with.ts",
+    "./equal": "./equal.ts",
+    "./index-of": "./index_of.ts",
+    "./last-index-of": "./last_index_of.ts",
+    "./ordinalize": "./ordinalize.ts",
+    "./pascalize": "./pascalize.ts",
+    "./slice": "./slice.ts",
+    "./starts-with": "./starts_with.ts",
+    "./titleize": "./titleize.ts",
+    "./tokens": "./tokens.ts",
+    "./trim": "./trim.ts",
+    "./underscore": "./underscore.ts",
+    "./utils": "./utils.ts"
+  },
+  "publish": {
+    "exclude": [
+      "**/*.test.ts",
+      "**/*_test.ts",
+      "**/*.test.js",
+      "**/*_test.js",
+      "**/*.test.mjs",
+      "**/*_test.mjs",
+      "**/*.test.cjs",
+      "**/*_test.cjs",
+      "**/*.test.d.ts",
+      "**/*_test.d.ts",
+      "**/*.spec.ts",
+      "**/*_spec.ts",
+      "**/test/run.ts",
+      "**/test/assert.ts",
+      "**/test/main.ts",
+      "ende.json",
+      "ende.jsonc"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neotales/js-lib.git",
+    "directory": "std/jsr/slices"
+  }
+}

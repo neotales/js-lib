@@ -1,0 +1,42 @@
+{
+  "name": "@neotales/is-elevated",
+  "version": "0.1.0-alpha.0",
+  "keywords": [
+    "is-elevated",
+    "deno",
+    "node",
+    "bun",
+    "ende",
+    "workerd",
+    "txiki"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neotales/js-lib.git",
+    "directory": "os/npm/is-elevated"
+  },
+  "license": "MIT",
+  "module": "./esm/mod.js",
+  "types": "./types/mod.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      },
+      "default": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      }
+    }
+  },
+  "scripts": {},
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "optionalDependencies": {
+    "koffi": "^2.9.0"
+  },
+  "_generatedBy": "dnt@0.44.0"
+}

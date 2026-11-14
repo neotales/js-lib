@@ -1,0 +1,14 @@
+export declare const pC: number;
+export declare const pP: number;
+export declare const pN: number;
+export declare const pS: number;
+export declare const pZ: number;
+export declare const pLu: number;
+export declare const pLl: number;
+export declare const pp: number;
+export declare const pg: number;
+export declare const pLo: number;
+export declare const pLmask: number;
+export declare const latin1: number[];
+export declare function is16(v: Array<number[]>, char: number): boolean;
+export declare function is32(v: Array<number[]>, char: number): boolean;

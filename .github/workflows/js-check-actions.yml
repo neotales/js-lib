@@ -1,4 +1,4 @@
-# Weekly pin check. Not part of js-ci.yml or js-cd.yml.
+# Weekly pin check. Not part of js-std-ci.yml, js-os-ci.yml, or js-cd.yml.
 name: js check actions
 
 on:

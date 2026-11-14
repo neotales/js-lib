@@ -1,6 +1,7 @@
 {
   "name": "@neotales/js-lib",
   "private": true,
+  "packageManager": "pnpm@12.18.0",
   "type": "module",
   "description": "Task entry for the js-lib satellite. Bun runs the tasks. The tests do not import node: or process.",
   "scripts": {
@@ -12,6 +13,14 @@
     "test:quickjs": "bun eng/scripts/test-lane.ts quickjs",
     "test:txiki": "bun eng/scripts/test-lane.ts txiki",
     "test:clearscript": "bun eng/scripts/test-lane.ts clearscript",
-    "sync:ende": "bun eng/scripts/sync-ende.ts"
+    "test:jerry": "bun eng/scripts/test-lane.ts jerry",
+    "test:chromium": "bun eng/scripts/test-lane.ts chromium",
+    "test:firefox": "bun eng/scripts/test-lane.ts firefox",
+    "test:webkit": "bun eng/scripts/test-lane.ts webkit",
+    "sync:ende": "bun eng/scripts/sync-ende.ts",
+    "transpile": "deno run -A --no-lock --node-modules-dir=auto eng/scripts/transpile.ts"
+  },
+  "devDependencies": {
+    "playwright": "1.65.0"
   }
 }

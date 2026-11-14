@@ -1,0 +1,6 @@
+# npm packages for the os area. Kept separate from std so the lockfiles do not share a dependency set.
+packages:
+  - "npm/*"
+allowBuilds:
+  koffi: true
+publishBranch: dev
