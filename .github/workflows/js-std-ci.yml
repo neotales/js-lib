@@ -84,6 +84,14 @@ jobs:
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: node --test eng/scripts/release-notes.test.mjs
 
+      - name: Test the release coordinator
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: node --test eng/scripts/release-coordinator.test.mjs
+
+      - name: Test the release workflow wiring
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: node --test eng/scripts/workflow-wiring.test.mjs
+
       # dev, plab-js-lib, and rt-<runtime>. A pull request uses head_ref.
       - name: Install pinned Linux runtimes
         if: >-

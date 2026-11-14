@@ -1,19 +1,24 @@
 # Publish this repository. Tests for a branch live in js-std-ci.yml and js-os-ci.yml. Pin checks live in js-check-actions.yml.
 #
-# Publishing is one tag-triggered job with two registries. npm and JSR both
-# authenticate with GitHub Actions OIDC (id-token: write); no token is read.
-# The npm trusted publisher is configured per package on npmjs.com and must
-# name this repository, workflow js-cd.yml, and environment production. The
-# JSR package must be linked to neotales/js-lib. Neither is done by this file.
-# eng/scripts/publish.mjs preflights every package before the first upload. An
-# existing npm version is skipped only on an exact tarball match; an existing
-# JSR version is logged and skipped because Deno publishes only unpublished
-# versions. See docs/publishing.md.
+# A normal release tag is `vYYYY.MM.DD-r.N`. The plan job resolves the previous
+# release tag on the first-parent chain, selects the registered areas that
+# changed or still have an unpublished version, and writes one plan. The matrix
+# then starts one publish job per selected area. Legacy `std/v*`, `js/v*`, and
+# `os/v*` tags still select exactly one area.
+#
+# npm and JSR both authenticate with GitHub Actions OIDC (id-token: write); no
+# token is read. The npm trusted publisher is configured per package on
+# npmjs.com and must name this repository, workflow js-cd.yml, and environment
+# production. The JSR package must be linked to neotales/js-lib. Publishing is
+# deliberately kept in this top-level workflow: a reusable workflow would move
+# the OIDC identity npm validates. Neither registry setting is changed by this
+# file. See docs/publishing.md.
 name: js cd
 
 on:
   push:
     tags:
+      - "v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]-r.[0-9]*"
       - "std/v[0-9]*"
       - "js/v[0-9]*"
       - "os/v[0-9]*"
@@ -48,11 +53,12 @@ jobs:
         run: |
           set -euo pipefail
           case "$RELEASE_TAG" in
+            v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]-r.[0-9]*) ;;
             std/v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]-r.[0-9]*) ;;
             js/v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]-r.[0-9]*) ;;
             os/v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]-r.[0-9]*) ;;
             *)
-              echo "js-cd.yml accepts std/vYYYY.MM.DD-r.N, js/vYYYY.MM.DD-r.N, or os/vYYYY.MM.DD-r.N. Got ${RELEASE_TAG}."
+              echo "js-cd.yml accepts vYYYY.MM.DD-r.N, std/vYYYY.MM.DD-r.N, js/vYYYY.MM.DD-r.N, or os/vYYYY.MM.DD-r.N. Got ${RELEASE_TAG}."
               exit 1
               ;;
           esac
@@ -89,6 +95,14 @@ jobs:
       - name: Test release notes
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: node --test eng/scripts/release-notes.test.mjs
+
+      - name: Test the release coordinator
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: node --test eng/scripts/release-coordinator.test.mjs
+
+      - name: Test the release workflow wiring
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: node --test eng/scripts/workflow-wiring.test.mjs
 
       # A release tag runs every extra step. dev, plab-js-lib, and rt-<runtime> do too.
       - name: Install pinned Linux runtimes
@@ -210,15 +224,17 @@ jobs:
             shell: bash
             run: bun run test:txiki
 
-  publish:
-    name: publish
+  plan:
+    name: plan
     needs: test
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    environment: production
+    timeout-minutes: 20
     permissions:
       contents: read
-      id-token: write
+    outputs:
+      has_areas: ${{ steps.release_plan.outputs.has_areas }}
+      matrix: ${{ steps.release_plan.outputs.matrix }}
+      plan: ${{ steps.release_plan.outputs.plan }}
     env:
       CI: "true"
       RELEASE_TAG: ${{ github.ref_name }}
@@ -246,24 +262,78 @@ jobs:
       - name: Install pnpm 12.18.0
         run: npm install -g pnpm@12.18.0
 
+      # The plan is written before any matrix job starts. It is the package
+      # table in the notes, and every publish job must match it.
       - name: Plan the release (no upload)
-        run: node eng/scripts/publish.mjs preflight --plan-json .build/release-plan.json
+        id: release_plan
+        run: node eng/scripts/release-coordinator.mjs plan --plan-json .build/release-plan.json --notes .build/release-notes.md --rationale .build/release-rationale.json --matrix-json .build/release-matrix.json
 
-      # The plan is the source of the package table. Notes are generated before
-      # the upload, and a skip is reported as a skip rather than a shipment.
-      - name: Generate release notes
-        run: node eng/scripts/release-notes.mjs --plan .build/release-plan.json --output .build/release-notes.md
-
-      - name: Upload release notes
+      - name: Upload release plan, notes and rationale
+        if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: js-lib-release-notes-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .build/release-notes.md
-          if-no-files-found: error
+          name: js-lib-release-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .build/release-plan.json
+            .build/release-notes.md
+            .build/release-rationale.json
+            .build/release-matrix.json
+          if-no-files-found: warn
           retention-days: 30
 
-      # Re-runs the plan. A version that appeared after preflight is logged as
-      # an unverified skip, not reported as a new upload; a real failure stops
-      # the run.
-      - name: Publish JSR and npm packages
-        run: node eng/scripts/publish.mjs publish
+  publish:
+    name: publish ${{ matrix.area }}
+    needs: plan
+    if: ${{ needs.plan.outputs.has_areas == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: js-cd-publish-${{ matrix.area }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan.outputs.matrix || '{"include":[{"area":"none","jsr":0,"npm":0,"packages":0,"skip":true}]}') }}
+    env:
+      CI: "true"
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Check out the release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Verify the release checkout
+        run: node eng/scripts/check-release-ref.mjs
+
+      - name: Set up Node 26.13.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26.13.0
+          package-manager-cache: false
+
+      - name: Set up Deno 2.9.8
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.8
+
+      - name: Install pnpm 12.18.0
+        run: npm install -g pnpm@12.18.0
+
+      - name: Write the approved plan
+        env:
+          RELEASE_PLAN: ${{ needs.plan.outputs.plan }}
+        run: |
+          mkdir -p .build
+          printf '%s\n' "$RELEASE_PLAN" > .build/release-plan.json
+
+      # The worker recomputes its own plan for race safety, but the package
+      # set must still match the coordinator's approved plan. A version that
+      # appeared between the two runs is allowed to become a skip; a changed
+      # name, version or directory is not.
+      - name: Publish this area
+        run: node eng/scripts/publish.mjs publish --area "${{ matrix.area }}" --expect-plan .build/release-plan.json

@@ -1,9 +1,14 @@
 # Publishing
 
 `js-cd.yml` publishes on a release tag. It is the only workflow that writes to a registry.
-There is no manual dispatch. A version that already exists is never overwritten: npm requires
-an exact tarball match to skip it, and an existing JSR version is logged and skipped because
-Deno publishes only unpublished versions. See [Existing versions](#existing-versions).
+There is no manual dispatch. A normal release is one annotated tag, `vYYYY.MM.DD-r.N`. The
+workflow's plan job discovers which registered areas changed, writes one plan, and then starts
+one publish job per selected area. Legacy area tags (`std/v*`, `js/v*`, `os/v*`) still select
+exactly one area.
+
+A version that already exists is never overwritten: npm requires an exact tarball match to skip
+it, and an existing JSR version is logged and skipped because Deno publishes only unpublished
+versions. See [Existing versions](#existing-versions).
 
 ## Release ref guard
 
@@ -17,31 +22,80 @@ unless:
 - the tag ref resolves to `github.sha`.
 
 This prevents a branch/tag mix-up, a moved tag, and an OIDC run whose code is not the code
-GitHub triggered.
+GitHub triggered. The coordinator additionally requires a normal `vYYYY.MM.DD-r.N` tag to be
+annotated, and resolves an annotated tag to its commit before comparing it with `HEAD`.
+Legacy area tags keep working even if they are lightweight.
 
 ## Tag to area
 
-| Tag | Area | Packages |
+| Tag | Areas | Notes |
 | --- | --- | --- |
-| `std/vYYYY.MM.DD-r.N` | `std` | `@neotales/chars`, `@neotales/slices` |
-| `js/vYYYY.MM.DD-r.N` | `std` | the same as `std/v*`, kept for the existing tag |
-| `os/vYYYY.MM.DD-r.N` | `os` | `@neotales/is-elevated` |
+| `vYYYY.MM.DD-r.N` | discovered | The normal release tag. An annotated tag. The plan job selects registered areas. |
+| `std/vYYYY.MM.DD-r.N` | `std` | Legacy. Selects `std` only. |
+| `js/vYYYY.MM.DD-r.N` | `std` | Legacy alias for `std/v*`. |
+| `os/vYYYY.MM.DD-r.N` | `os` | Legacy. Selects `os` only. |
 
-The package version comes from each manifest, not from the tag. The tag selects the area
-and orders the release. A tag does not change a version.
+The package version comes from each manifest, not from the tag. The tag selects the area and
+orders the release. A tag does not change a version. A `vYYYY.MM.DD-r.N` tag is reserved for
+js-lib in this repository and its satellite; do not use that shape for another project, because
+the baseline walk treats it as a js-lib release.
+
+## Area registry
+
+`eng/release-areas.json` is the only list of publishable areas. It currently registers `std` and
+`os`:
+
+```json
+{
+  "areas": [
+    { "name": "std", "legacyTagPrefixes": ["std/v", "js/v"] },
+    { "name": "os", "legacyTagPrefixes": ["os/v"] }
+  ],
+  "sharedPaths": ["AGENTS.md", "LICENSE.md", "README.md", "..."]
+}
+```
+
+- A top-level directory containing `jsr/` or `npm/` that is not registered fails the plan. Add
+  the area to this file, or remove the directory.
+- A registered area with no publishable package fails the plan.
+- There are no per-area jobs in the workflow. The matrix is generated from the registry, so a new
+  area needs no workflow edit.
+- `sharedPaths` are release/build/root paths that affect every area. A change under `eng/`,
+  `docs/`, `.github/`, or a root manifest selects every area. A `README.md` inside
+  `std/jsr/chars/` is packaged documentation and selects only `std`; `docs/publishing.md` is
+  shared and selects both.
+- Anything outside a registered area and outside `sharedPaths` is conservatively treated as
+  shared and selects every area.
+
+The plan job refuses an unregistered area, or a registered area with no publishable package,
+before it produces a matrix.
 
 ## Release plan and preflight
 
-`node eng/scripts/publish.mjs preflight` runs before the first upload. It:
+The plan job runs `node eng/scripts/release-coordinator.mjs plan` before any publish job. It:
 
-- validates every npm version's dist-tag;
-- runs `deno publish --dry-run` for every JSR package with no `--no-check`, no
-  `--no-provenance`, and no `--allow-dirty` — the same flags as the real publish;
-- runs `pnpm pack` for every npm twin and refuses a `workspace:` link, a test, or the harness;
-- reads the registry for every target version and rejects malformed JSR metadata;
-- records an existing JSR version as `skip-existing` instead of failing the plan;
-- requires every npm twin to have a JSR source at the same version;
-- orders both registries by the workspace dependency graph (`chars` before `slices`).
+1. validates the tag, resolving an annotated tag to its commit;
+2. finds the previous normal release tag by walking the **first-parent** chain from `HEAD`,
+   skipping the current tag and every tag at `HEAD`;
+3. with no previous normal release tag, selects every registered area (the first release);
+4. otherwise selects areas whose paths changed, plus every area with a manifest version that is
+   absent from JSR or npm;
+5. inspects both registries for every area it considers, and fails closed on a network error,
+   a non-404 HTTP error, malformed JSR metadata, or a malformed npm response;
+6. runs `publish.mjs` preflight for the selected areas, which:
+   - validates every npm version's dist-tag;
+   - runs `deno publish --dry-run` for every JSR package with no `--no-check`, no
+     `--no-provenance`, and no `--allow-dirty` — the same flags as the real publish;
+   - runs `pnpm pack` for every npm twin and refuses a `workspace:` link, a test, or the harness;
+   - reads the registry for every target version;
+   - records an existing JSR version as `skip-existing` instead of failing the plan;
+   - requires every npm twin to have a JSR source at the same version;
+   - orders both registries by the workspace dependency graph (`chars` before `slices`);
+7. validates the plan against the checkout manifests, so an area/package mismatch cannot start a
+   job;
+8. writes `.build/release-plan.json`, `.build/release-notes.md`,
+   `.build/release-rationale.json`, and `.build/release-matrix.json`, then emits the matrix and the
+   plan as GitHub Actions job outputs.
 
 The preflight does not upload. A dry run does not authenticate, so it does **not** prove that
 the trusted publisher accepts the workflow. Only a real publish exercises OIDC.
@@ -51,72 +105,105 @@ A 404 from the JSR package metadata means the package is unpublished; a version 
 with `null`, malformed JSON, or a malformed `versions` object fails the plan. A network error or
 a non-404 HTTP error also fails the plan. None of those are turned into a skip.
 
-`node eng/scripts/publish.mjs publish` re-runs the plan and then uploads. It stops at the first
-real failure.
+An npm 404 means the version is unpublished. A 200 must be an object whose `name` and `version`
+match the requested package and version, and whose `dist` object has a `sha512-...` `integrity`
+and a non-empty `tarball`. A `null`, empty, wrong-name, wrong-version, or incomplete 200 is
+malformed and fails the plan. It is never treated as an existing version.
+
+The matrix has one row per selected area. An area that is not selected produces no row; when no
+area is selected the matrix contains one sentinel row and the publish job is skipped, because
+GitHub rejects an empty matrix. Each publish job runs
+`node eng/scripts/publish.mjs publish --area <area> --expect-plan .build/release-plan.json`.
+It re-runs the plan for race safety, but refuses to publish a package set that differs from the
+coordinator's approved plan. `--area` is mandatory for a normal release tag, so a matrix job
+cannot silently publish another area.
+
+The plan job exposes `has_areas`, `matrix`, and `plan` as GitHub Actions job outputs from its
+`release_plan` step. `eng/scripts/check-workflow-wiring.mjs` and
+`eng/scripts/workflow-wiring.test.mjs` check every `js-cd.yml` copy in the checkout (both in the
+monorepo), so a missing step id or outputs mapping cannot silently skip every publish job.
+
+A legacy area tag (`std/v*`, `js/v*`, `os/v*`) still resolves without `--area`. It selects exactly
+one area and uses the previous area tag for its notes, preserving the old behaviour.
+
+## Cross-area dependencies
+
+A matrix runs one job per area, so one area cannot be ordered after another in the same run. The
+coordinator validates every cross-area workspace dependency against the registry:
+
+- if the dependency version is already published, the release may proceed;
+- if it is missing, the plan fails before any upload and names the area that must be released
+  first.
+
+`std` and `os` are currently independent. This is a preflight refusal, not silent reordering.
 
 ## Release notes
 
-The publish job generates release notes before the first upload. Nothing is
-created as a GitHub Release, and the job keeps `contents: read`.
+The plan job generates release notes before any publish job starts. Nothing is created as a
+GitHub Release, and the plan and publish jobs keep `contents: read`.
 
 The files are deterministic and live in the ignored build directory:
 
 | File | Written by | Purpose |
 | --- | --- | --- |
-| `.build/release-plan.json` | `publish.mjs preflight --plan-json` | Package name, version, action and relative directory for every planned package |
-| `.build/release-notes.md` | `release-notes.mjs` | The markdown below, appended to `$GITHUB_STEP_SUMMARY` and uploaded as an artifact |
+| `.build/release-plan.json` | `release-coordinator.mjs` | Package name, version, action and relative directory for every planned package |
+| `.build/release-notes.md` | `release-coordinator.mjs` | The combined markdown below, appended to `$GITHUB_STEP_SUMMARY` |
+| `.build/release-rationale.json` | `release-coordinator.mjs` | Tag kind, baseline, changed paths, registry state, missing versions, selection reasons, and plan |
+| `.build/release-matrix.json` | `release-coordinator.mjs` | The matrix that was emitted, including the sentinel row |
 
-In the monorepo the same files are under `js/lib/.build/`. The artifact is named
-`js-lib-release-notes-<run_id>-<run_attempt>`; the tag is in the file, not in the
-artifact name, because a tag contains `/`.
+The four files are uploaded as the `js-lib-release-plan-<run_id>-<run_attempt>` artifact. The plan
+is also passed to each publish job as a job output; the artifact is the durable record. In the
+monorepo the same files are under `js/lib/.build/`. The tag is in the file, not in the artifact
+name, because a tag can contain `/`.
 
-The package table comes from the preflight plan, not from a second discovery
-pass. `publish` is the only action reported as scheduled to publish.
-`skip-existing` (JSR) and `verified-skip` (npm) are reported in a separate table
-with their limitation spelled out. A JSR skip is **not** a content check, and the
-notes say so. Plan errors stop the notes from scheduling anything. The notes are
-generated before the upload, so a publish failure does not erase the plan that
-was approved.
+The package table comes from the coordinator's preflight plan, not from a second discovery pass.
+`publish` is the only action reported as scheduled to publish. `skip-existing` (JSR) and
+`verified-skip` (npm) are reported in a separate table with their limitation spelled out. A JSR
+skip is **not** a content check, and the notes say so. Plan errors stop the notes from scheduling
+anything. The notes are generated before any upload, so a publish failure does not erase the plan
+that was approved.
 
-The generator validates the plan before writing anything. Its expected package
-set comes from the publishable JSR and npm manifests discovered in the checkout,
-using the same discovery as `publish.mjs`; no package name is hardcoded here.
-`plan.areas` must be exactly the area selected by the tag. Every `jsr` and `npm`
-entry must carry that area, and its name, version, and canonical relative `dir`
-must match a discovered manifest. The plan must contain every discovered package
-exactly once: a missing package, an extra or fake package, a wrong version, a
-wrong directory, or a duplicate is rejected. A `std` plan passed to an `os` tag,
-or the reverse, is rejected too. Rejection is a non-zero exit before the output
-file, step summary, or artifact exists. That is deliberate: notes that present
-the wrong packages are worse than no notes.
+The combined notes have one section per selected area. A shared change appears in every affected
+area's section, because it really does affect every area. When no area is selected the notes say
+so and say that no publish job was scheduled.
+
+The generator validates each area's slice of the plan before writing anything. Its expected
+package set comes from the publishable JSR and npm manifests discovered in the checkout, using
+the same discovery as `publish.mjs`; no package name is hardcoded here. The area's entries must
+carry that area, and their name, version, and canonical relative `dir` must match a discovered
+manifest. The plan must contain every discovered package exactly once: a missing package, an
+extra or fake package, a wrong version, a wrong directory, or a duplicate is rejected. A `std`
+plan passed to an `os` area, or the reverse, is rejected too. In the notes generator, rejection is
+a non-zero exit before the output file is written. In the coordinator, the rejection is recorded
+in a failure note and the plan job exits non-zero, so no publish job starts.
 
 ### Baseline and commit range
 
-The publish job checks out with `fetch-depth: 0`; without full tags and history
-the baseline is wrong or absent.
+The plan job checks out with `fetch-depth: 0`; without full tags and history the baseline is wrong
+or absent.
 
-- The baseline is the nearest reachable area tag with a shorter history, not the
-  tag with the newest name. The current tag is excluded. A second tag name on the
-  same commit is an alias and is also excluded, so a re-run of a tag does not
-  compare it against itself and produce empty notes.
-- `std` notes consider both `std/v*` and `js/v*`; `os` notes consider `os/v*`.
-  When two aliases are at the same commit, the current prefix wins the tie.
-- The first release has no previous tag. It uses the full reachable history
-  through `HEAD` and says so, instead of starting from a tag that does not exist
-  and producing an empty log.
-- Merge commits are omitted. A commit is included when it changes this area, or
-  when it changes a shared path (`eng/`, `docs/`, `.github/`, or a root
-  manifest). Shared changes affect both areas, so they appear in both notes.
-- A module label comes only from this area's paths. A commit that changes
-  `eng/` and `os/jsr/is-elevated` is labelled `area` in the `std` notes, not
-  `is-elevated`. A commit that changes both a `std` module and `eng/` is
-  labelled with the module and `area`.
-- A module comes from the paths a commit changed (`std/jsr/chars`,
-  `std/npm/chars`, `os/jsr/is-elevated`, and so on), not from its scope. A shared
-  path such as `docs/`, `eng/`, or `.github/` is labelled `area`.
+- A normal `v*` release uses the nearest previous normal release tag on the **first-parent**
+  chain. A tag on a merged side branch is not a release ancestor of this history and is ignored.
+  The current tag and every tag at `HEAD` are excluded, so a re-run does not compare the tag with
+  itself.
+- A legacy area tag keeps the old baseline: the nearest reachable area tag with a shorter
+  history. `std` notes consider both `std/v*` and `js/v*`; `os` notes consider `os/v*`. When two
+  aliases are at the same commit, the current prefix wins the tie.
+- The first normal release has no previous normal tag. It selects every registered area and uses
+  the full reachable history through `HEAD`. Area tags that predate the normal format are not
+  used as its baseline.
+- Merge commits are omitted from the change list. A commit is included when it changes this
+  area, or when it changes a shared path (`eng/`, `docs/`, `.github/`, or a root manifest).
+  Shared changes affect every area, so they appear in every area's section.
+- A module label comes only from this area's paths. A commit that changes `eng/` and
+  `os/jsr/is-elevated` is labelled `area` in the `std` notes, not `is-elevated`. A commit that
+  changes both a `std` module and `eng/` is labelled with the module and `area`.
+- A module comes from the paths a commit changed (`std/jsr/chars`, `std/npm/chars`,
+  `os/jsr/is-elevated`, and so on), not from its scope. A shared path such as `docs/`, `eng/`, or
+  `.github/` is labelled `area`.
 - A commit that appears twice is rendered once by full SHA.
-- When no commit touches the area, the notes say so explicitly instead of
-  presenting an empty section that reads as "nothing changed".
+- When no commit touches the area, the notes say so explicitly instead of presenting an empty
+  section that reads as "nothing changed".
 
 ### Conventional types and scopes
 
@@ -146,8 +233,11 @@ local preview. This repeats the release ref guard rather than assuming the ref.
 ## Existing versions
 
 - **npm:** the local `pnpm pack` tarball's sha512 is compared with the registry
-  `dist.integrity`. A match is a verified skip. A missing or different integrity fails before
-  any upload. A version that exists with other code must be bumped, not republished.
+  `dist.integrity`. A match is a verified skip. Before that comparison, the version response must
+  be a valid object for the requested name and version with a `sha512-...` integrity and a
+  non-empty tarball. A malformed 200 fails before any upload; a 404 is an unpublished version.
+  A missing or different integrity fails before any upload. A version that exists with other code
+  must be bumped, not republished.
 - **JSR:** an existing version is logged and skipped. Deno publishes only unpublished versions,
   so a rerun of the same tag does the same thing. The registry exposes no local artifact that
   this repository can compare with the source, so the skip is **not** a content check. The tool
@@ -179,6 +269,15 @@ A rerun of the same tag is safe for versions that already exist:
 - An existing npm version is skipped only when its tarball integrity matches exactly; a different
   tarball fails.
 - A later version that is still missing is published. Dependency order is unchanged.
+
+A new normal release also repairs a previous partial release without a path change. The
+coordinator reads the current manifests and both registries, and selects an area whenever any of
+its manifest versions is absent, even if no commit since the previous tag touched that area. A
+registry error fails the plan instead of being treated as "already published".
+
+Each area is a separate matrix job. If `std` fails, `os` is not marked failed and does not
+republish `std`. A re-run of the tag queues behind the same per-area concurrency group. Do not
+move, delete, or reuse the old tag.
 
 The limitation is content: if a JSR version exists but the source at the tag changed, the skip
 will not update it. Bump the version of any package whose content changed. The skip cannot detect
@@ -221,7 +320,8 @@ the `is-elevated` type check fails on `@types/node`. `os/ende.json` is the synce
 
 Both registries use GitHub Actions OIDC. The publish job has `id-token: write` and
 `environment: production`, runs on a GitHub-hosted runner, and reads no npm token, no
-`NODE_AUTH_TOKEN`, and no JSR token.
+`NODE_AUTH_TOKEN`, and no JSR token. The plan job has `contents: read` only and cannot mint an
+OIDC token, so the coordinator cannot publish.
 
 The npm trusted publisher is configured per package on npmjs.com:
 
@@ -237,6 +337,31 @@ will reject it even though OIDC authentication succeeds.
 The JSR package must be linked to `https://github.com/neotales/js-lib` in the package's
 Settings tab. The public `meta.json` for `@neotales/chars`, `@neotales/slices`, and
 `@neotales/is-elevated` already reports that link.
+
+### Workflow identity constraint
+
+Publishing stays in the top-level `js-cd.yml`. It is not moved to a reusable workflow. The npm
+trusted-publisher form names a workflow **filename** that must live in `.github/workflows/`, and
+npm validates the calling workflow's name when `workflow_call` is involved; moving the publish
+steps to another file would change the identity npm checks and could silently break the existing
+`js-cd.yml`/`production` configuration. A matrix job inside `js-cd.yml` keeps the same workflow
+filename and environment for every area.
+
+JSR does not configure a workflow filename: the package is linked to the repository and accepts
+GitHub Actions OIDC. Keeping the same repository and workflow file is still the identity that was
+linked.
+
+This was checked against the official documentation on 2026-11-14:
+
+- npm, [Trusted publishing for npm packages](https://docs.npmjs.com/trusted-publishers):
+  workflow filename only, no path, must exist in `.github/workflows/`; reusable workflows validate
+  the calling workflow and require `id-token: write` on both.
+- JSR, [Publishing packages](https://jsr.io/docs/publishing-packages): link the package to the
+  GitHub repository, then publish from GitHub Actions with `id-token: write`; no separate
+  workflow-name setting.
+
+No registry setting needs to change for this release coordinator. If a trusted publisher is
+deleted and recreated, keep the filename `js-cd.yml` and environment `production`.
 
 Registry-side settings cannot be read by this repository. If a publish returns `ENEEDAUTH`,
 `actorNotAuthorized`, or `actorNotScopeMember`, check the registry setting before changing
@@ -266,6 +391,9 @@ These need an authenticated browser and are not done by CI:
    authentication and disallow tokens" and revoke old automation tokens.
 3. JSR: each package -> Settings -> GitHub repository is `neotales/js-lib`; scope -> Settings
    -> GitHub Actions publishing security.
+4. Create the normal release tag as an annotated tag in `neotales/js-lib`:
+   `git tag -a v2026.11.14-r.1 -m "v2026.11.14-r.1"`. Do not create a lightweight tag for
+   `v*`.
 
 ## Local dry runs
 
@@ -277,10 +405,23 @@ node eng/scripts/check-publish.mjs
 bun run sync:ende -- --check
 node --test eng/scripts/publish.test.mjs
 node --test eng/scripts/release-notes.test.mjs
+node --test eng/scripts/release-coordinator.test.mjs
+node --test eng/scripts/workflow-wiring.test.mjs
+
+# The normal release path. --allow-missing-tag is only for a local preview.
+RELEASE_TAG=v2026.11.14-r.1 node eng/scripts/release-coordinator.mjs plan \
+  --allow-missing-tag \
+  --plan-json .build/release-plan.json \
+  --notes .build/release-notes.md \
+  --rationale .build/release-rationale.json \
+  --matrix-json .build/release-matrix.json
+
+# The legacy area path remains available.
 RELEASE_TAG=std/v2026.11.14-r.1 node eng/scripts/publish.mjs preflight --plan-json .build/release-plan-std.json
 RELEASE_TAG=os/v2026.11.14-r.1 node eng/scripts/publish.mjs preflight --plan-json .build/release-plan-os.json
 RELEASE_TAG=std/v2026.11.14-r.1 node eng/scripts/release-notes.mjs --plan .build/release-plan-std.json --output .build/release-notes-std.md --allow-missing-tag
 RELEASE_TAG=os/v2026.11.14-r.1 node eng/scripts/release-notes.mjs --plan .build/release-plan-os.json --output .build/release-notes-os.md --allow-missing-tag
+
 pnpm --dir std/npm/chars publish --dry-run --no-git-checks
 pnpm --dir std/npm/slices publish --dry-run --no-git-checks
 pnpm --dir os/npm/is-elevated publish --dry-run --no-git-checks
@@ -295,4 +436,10 @@ A preflight where every version already exists exits 0: each existing JSR versio
 metadata exits non-zero and uploads nothing.
 
 `deno publish` refuses a working tree with untracked files. Use `--allow-dirty` only for a
-local packaging check, never for the release preflight.
+local packaging check, never for the release preflight. A local preview of a normal tag that has
+not been created yet needs `--allow-missing-tag`; that also skips the annotated-tag check because
+there is no local tag object to inspect.
+
+A coordinator run reads JSR and npm but never writes to either registry, never creates a GitHub
+Release, and never creates or moves a git tag. The plan job is the only place the matrix is
+produced; a publish worker cannot add an area.

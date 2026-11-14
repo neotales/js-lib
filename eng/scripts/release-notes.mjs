@@ -24,8 +24,14 @@ import {
 } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { areasForTag, discoverPackages } from "./publish.mjs";
+import { discoverPackages } from "./publish.mjs";
 import { satelliteRoot } from "./workspace-map.mjs";
+import {
+  defaultAreaRegistry,
+  loadAreaRegistry,
+  parseReleaseTag,
+  RELEASE_TAG_PATTERN,
+} from "./release-areas.mjs";
 
 const KNOWN_ACTIONS = new Set([
   "publish",
@@ -331,12 +337,18 @@ function toRootPath(path, rootPrefix) {
 // under the other area is ignored for module labels, but it does not suppress
 // a shared change. The returned module ids follow the order of the plan so
 // notes stay deterministic.
-export function classifyCommitPaths(paths, area, modulePaths, rootPrefix = "") {
+export function classifyCommitPaths(
+  paths,
+  area,
+  modulePaths,
+  rootPrefix = "",
+  knownAreas = ["std", "os"],
+) {
   const modules = new Set();
   let touchesOwnArea = false;
   let touchesShared = false;
   const areaPrefix = `${area}/`;
-  const otherAreas = ["std", "os"].filter((value) => value !== area);
+  const otherAreas = knownAreas.filter((value) => value !== area);
 
   for (const path of paths) {
     const local = toRootPath(path, rootPrefix);
@@ -463,6 +475,48 @@ export function loadBaseline({ repo, area, currentTag, headSha }) {
   return selectBaseline(tags, currentTag, headSha);
 }
 
+// A normal release tag is compared with the previous normal release tag on the
+// first-parent chain. A tag on a merged side branch is not a release ancestor
+// of this history and is ignored. The current tag and every alias on HEAD are
+// excluded, so a rerun compares against the previous release rather than
+// itself.
+export function loadFirstParentReleaseBaseline({ repo, tag, headSha }) {
+  const head = headSha ?? headShaOf(repo);
+  const output = runGit(repo, [
+    "for-each-ref",
+    "--format=%(refname:strip=2)%09%(objectname)%09%(*objectname)",
+    "refs/tags",
+  ]);
+  const tagsBySha = new Map();
+  for (const line of output.split("\n")) {
+    if (!line.trim()) continue;
+    const [name, object, peeled] = line.split("\t");
+    if (name === tag) continue;
+    if (!RELEASE_TAG_PATTERN.test(name)) continue;
+    const sha = (peeled || object || "").trim();
+    if (!/^[0-9a-f]{40}$/.test(sha)) continue;
+    if (!tagsBySha.has(sha)) tagsBySha.set(sha, []);
+    tagsBySha.get(sha).push(name);
+  }
+
+  const firstParent = runGit(repo, ["rev-list", "--first-parent", head])
+    .split("\n")
+    .filter(Boolean);
+  for (const sha of firstParent) {
+    // Tags at HEAD are aliases of the release being produced, not a baseline.
+    if (sha === head) continue;
+    const names = tagsBySha.get(sha);
+    if (!names || names.length === 0) continue;
+    const name = [...names].sort((a, b) => b.localeCompare(a))[0];
+    const distance = Number(
+      runGit(repo, ["rev-list", "--first-parent", "--count", `${sha}..${head}`]).trim(),
+    );
+    if (!Number.isInteger(distance) || distance <= 0) continue;
+    return { name, sha, distance, firstParent: true, releaseTag: true };
+  }
+  return null;
+}
+
 export function currentTagSha(repo, tag) {
   const output = runGit(repo, [
     "rev-parse",
@@ -478,6 +532,7 @@ export function collectCommits({
   area,
   modulePaths,
   fromSha = null,
+  knownAreas = ["std", "os"],
 }) {
   const rootPrefix = rootPrefixOf(repo, root);
   const range = fromSha ? [`${fromSha}..HEAD`] : ["HEAD"];
@@ -507,6 +562,7 @@ export function collectCommits({
       area,
       modulePaths,
       rootPrefix,
+      knownAreas,
     );
     if (classification.touchesArea) {
       const parsed = parseConventionalCommit(current.subject);
@@ -540,8 +596,15 @@ export function collectCommits({
 function areaTagSummary(baseline, area, headSha) {
   if (!baseline) {
     return (
-      `First recorded \`${area}\` release; the full history through ` +
+      `First recorded release for this area; the full history through ` +
       `${codeSpan(headSha.slice(0, 7))} is in range.`
+    );
+  }
+  if (baseline.releaseTag) {
+    return (
+      `Previous release tag ${codeSpan(baseline.name)} at ` +
+      `${codeSpan(baseline.sha.slice(0, 7))}; ${baseline.distance} first-parent commit` +
+      `${baseline.distance === 1 ? "" : "s"} in range.`
     );
   }
   return (
@@ -734,7 +797,7 @@ export function buildReleaseNotes({
     `- Area: ${codeSpan(area)}`,
     `- Baseline: ${areaTagSummary(baseline, area, headSha)}`,
     `- Commits touching this area: ${unique.length}`,
-    "- Source: `eng/scripts/publish.mjs preflight` and `git log`; no registry write and no GitHub Release.",
+    "- Source: `eng/scripts/release-coordinator.mjs` and `git log`; no registry write and no GitHub Release.",
     "",
   ];
 
@@ -763,39 +826,186 @@ export function buildReleaseNotes({
 // ---------------------------------------------------------------------------
 // Entry points
 
-export function generateReleaseNotes({ repo, root, tag, plan, headSha = null }) {
-  const area = areasForTag(tag)[0];
-  const expectedPackages = expectedPackagesForArea(root, area);
-  const normalized = normalizePlan(plan, area, expectedPackages);
+export function generateReleaseNotes({
+  repo,
+  root,
+  tag,
+  plan,
+  headSha = null,
+  area = null,
+  baseline,
+  knownAreas = null,
+  registry = null,
+}) {
+  const parsed = parseReleaseTag(tag, registry ?? defaultAreaRegistry());
+  if (area === null && parsed.kind !== "legacy") {
+    throw new Error(`release tag ${tag} covers selected areas; pass an area`);
+  }
+  const resolvedArea = area ?? parsed.area;
+  const known =
+    knownAreas ??
+    (registry ? registry.areas.map((entry) => entry.name) : defaultAreaRegistry().areas.map((entry) => entry.name));
+  const expectedPackages = expectedPackagesForArea(root, resolvedArea);
+  const normalized = normalizePlan(plan, resolvedArea, expectedPackages);
   if (normalized.fatal.length > 0) {
     throw new Error(
-      `release plan does not match ${area}: ${normalized.fatal.join("; ")}`,
+      `release plan does not match ${resolvedArea}: ${normalized.fatal.join("; ")}`,
     );
   }
   const head = headSha ?? headShaOf(repo);
-  const baseline = loadBaseline({ repo, area, currentTag: tag, headSha: head });
+  const chosenBaseline =
+    baseline === undefined
+      ? parsed.kind === "legacy"
+        ? loadBaseline({ repo, area: resolvedArea, currentTag: tag, headSha: head })
+        : loadFirstParentReleaseBaseline({ repo, tag, headSha: head })
+      : baseline;
   const modulePaths = modulePathsFromPlan(normalized.entries);
   const commits = collectCommits({
     repo,
     root,
-    area,
+    area: resolvedArea,
     modulePaths,
-    fromSha: baseline ? baseline.sha : null,
+    fromSha: chosenBaseline ? chosenBaseline.sha : null,
+    knownAreas: known,
   });
   return {
     markdown: buildReleaseNotes({
       tag,
-      area,
-      baseline,
+      area: resolvedArea,
+      baseline: chosenBaseline,
       commits,
       plan,
       headSha: head,
       expectedPackages,
     }),
-    area,
-    baseline,
+    area: resolvedArea,
+    baseline: chosenBaseline,
     commitCount: commits.length,
   };
+}
+
+// One release tag can cover several areas. The package table for each area is
+// built from the same combined plan, filtered to that area, so the notes cannot
+// claim a package belongs to the wrong area. A shared change appears in every
+// affected area because it really does affect every area.
+export function generateReleaseNotesForAreas({
+  repo,
+  root,
+  tag,
+  plan,
+  areas,
+  headSha = null,
+  baseline,
+  knownAreas = null,
+  registry = null,
+}) {
+  const parsed = parseReleaseTag(tag, registry ?? defaultAreaRegistry());
+  if (parsed.kind === "legacy") {
+    if (areas.length !== 1 || areas[0] !== parsed.area) {
+      throw new Error(`legacy tag ${tag} selects exactly ${parsed.area}`);
+    }
+  }
+  const known =
+    knownAreas ??
+    (registry ? registry.areas.map((entry) => entry.name) : defaultAreaRegistry().areas.map((entry) => entry.name));
+  const head = headSha ?? headShaOf(repo);
+  const chosenBaseline =
+    baseline === undefined
+      ? parsed.kind === "legacy"
+        ? loadBaseline({ repo, area: areas[0], currentTag: tag, headSha: head })
+        : loadFirstParentReleaseBaseline({ repo, tag, headSha: head })
+      : baseline;
+
+  const sections = [];
+  let commitCount = 0;
+  for (const area of areas) {
+    const areaPlan = {
+      areas: [area],
+      jsr: (plan.jsr ?? []).filter((entry) => entry.area === area),
+      npm: (plan.npm ?? []).filter((entry) => entry.area === area),
+      errors: plan.errors ?? [],
+    };
+    const result = generateReleaseNotes({
+      repo,
+      root,
+      tag,
+      plan: areaPlan,
+      headSha: head,
+      area,
+      baseline: chosenBaseline,
+      knownAreas: known,
+      registry: registry ?? defaultAreaRegistry(),
+    });
+    sections.push({ area, markdown: result.markdown });
+    commitCount += result.commitCount;
+  }
+
+  return {
+    markdown: buildCombinedReleaseNotes({
+      tag,
+      areas,
+      baseline: chosenBaseline,
+      headSha: head,
+      sections,
+    }),
+    areas,
+    baseline: chosenBaseline,
+    commitCount,
+  };
+}
+
+function releaseBaselineSummary(baseline, headSha) {
+  if (!baseline) {
+    return (
+      `First recorded release; the full history through ` +
+      `${codeSpan(headSha.slice(0, 7))} is in range.`
+    );
+  }
+  if (!baseline.releaseTag) {
+    return (
+      `Previous tag ${codeSpan(baseline.name)} at ` +
+      `${codeSpan(baseline.sha.slice(0, 7))}; ${baseline.distance} commit` +
+      `${baseline.distance === 1 ? "" : "s"} in range.`
+    );
+  }
+  return (
+    `Previous release tag ${codeSpan(baseline.name)} at ` +
+    `${codeSpan(baseline.sha.slice(0, 7))}; ${baseline.distance} first-parent commit` +
+    `${baseline.distance === 1 ? "" : "s"} in range.`
+  );
+}
+
+function nestAreaNotes(markdown, area) {
+  const lines = String(markdown).trimEnd().split("\n");
+  if (lines.length > 0) lines[0] = `## Area: ${codeSpan(area)}`;
+  for (let index = 1; index < lines.length; index++) {
+    if (/^#{2,6}\s/.test(lines[index])) lines[index] = `#${lines[index]}`;
+  }
+  return lines.join("\n");
+}
+
+function buildCombinedReleaseNotes({ tag, areas, baseline, headSha, sections }) {
+  const lines = [`# Release notes: ${codeSpan(tag)}`, ""];
+  if (areas.length === 0) {
+    lines.push(
+      baseline
+        ? `No registered area changed since ${codeSpan(baseline.name)}, and every manifest version is already published. No publish job was scheduled.`
+        : "No registered area was selected. No publish job was scheduled.",
+      "",
+    );
+    return `${lines.join("\n").trimEnd()}\n`;
+  }
+
+  lines.push(
+    `- Areas: ${areas.map((area) => codeSpan(area)).join(", ")}`,
+    `- Baseline: ${releaseBaselineSummary(baseline, headSha)}`,
+    "- Source: `eng/scripts/release-coordinator.mjs` and `eng/scripts/publish.mjs`; no registry write and no GitHub Release.",
+    "",
+  );
+  for (const section of sections) {
+    lines.push(nestAreaNotes(section.markdown, section.area), "");
+  }
+  return `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n`;
 }
 
 function parseArgs(argv) {
@@ -805,6 +1015,8 @@ function parseArgs(argv) {
     tag: process.env.RELEASE_TAG ?? null,
     repo: null,
     root: null,
+    area: null,
+    registry: null,
     allowMissingTag: false,
   };
   for (let index = 0; index < argv.length; index++) {
@@ -819,6 +1031,8 @@ function parseArgs(argv) {
     else if (arg === "--tag") options.tag = value();
     else if (arg === "--repo") options.repo = value();
     else if (arg === "--root") options.root = value();
+    else if (arg === "--area") options.area = value();
+    else if (arg === "--registry") options.registry = value();
     else if (arg === "--allow-missing-tag") options.allowMissingTag = true;
     else throw new Error(`unknown argument ${arg}`);
   }
@@ -865,12 +1079,44 @@ function main() {
   }
 
   const plan = JSON.parse(readFileSync(resolve(options.plan), "utf8"));
+  const registry = loadAreaRegistry(root, {
+    ...(options.registry ? { path: resolve(options.registry) } : {}),
+    fallback: options.registry === null,
+  });
+  const parsed = parseReleaseTag(options.tag, registry);
+  let area = options.area;
+  if (area === null) {
+    if (parsed.kind !== "legacy") {
+      throw new Error(
+        `release tag ${options.tag} covers selected areas; pass --area or use the coordinator`,
+      );
+    }
+    area = parsed.area;
+  } else if (!registry.areas.some((entry) => entry.name === area)) {
+    throw new Error(`unknown area ${area}; add it to the area registry`);
+  } else if (parsed.kind === "legacy" && parsed.area !== area) {
+    throw new Error(`tag ${options.tag} selects ${parsed.area}, not ${area}`);
+  }
+
+  // A coordinator plan covers every selected area. A legacy plan covers one.
+  // Filtering makes this CLI accept both, while normalizePlan still rejects a
+  // missing or fake package for the requested area.
+  const areaPlan = {
+    areas: [area],
+    jsr: (plan.jsr ?? []).filter((entry) => entry?.area === area),
+    npm: (plan.npm ?? []).filter((entry) => entry?.area === area),
+    errors: plan.errors ?? [],
+  };
+
   const result = generateReleaseNotes({
     repo,
     root,
     tag: options.tag,
-    plan,
+    plan: areaPlan,
     headSha: head,
+    area,
+    registry,
+    knownAreas: registry.areas.map((entry) => entry.name),
   });
 
   mkdirSync(dirname(output), { recursive: true });

@@ -1,0 +1,27 @@
+{
+  "areas": [
+    {
+      "name": "std",
+      "legacyTagPrefixes": ["std/v", "js/v"]
+    },
+    {
+      "name": "os",
+      "legacyTagPrefixes": ["os/v"]
+    }
+  ],
+  "sharedPaths": [
+    "AGENTS.md",
+    "LICENSE.md",
+    "README.md",
+    ".gitattributes",
+    ".gitignore",
+    "deno.json",
+    "ende.json",
+    "package.json",
+    "pnpm-lock.yaml",
+    ".agents",
+    ".github",
+    "docs",
+    "eng"
+  ]
+}

@@ -38,6 +38,11 @@ import {
   isTestFile,
   satelliteRoot,
 } from "./workspace-map.mjs";
+import {
+  loadAreaRegistry,
+  parseReleaseTag,
+  RELEASE_TAG_PATTERN,
+} from "./release-areas.mjs";
 
 const JSR_ORIGIN = "https://jsr.io";
 const NPM_ORIGIN = "https://registry.npmjs.org";
@@ -84,6 +89,91 @@ export function areasForTag(tag) {
   throw new Error(
     `unsupported release tag ${tag}; use std/v*, js/v*, or os/v*`,
   );
+}
+
+// A normal release tag covers a set of areas chosen by the coordinator, so a
+// publish worker must be told which one it owns. A legacy area tag still names
+// exactly one area and remains runnable without `--area`.
+export function resolvePublishAreas({ tag, area = null, registry }) {
+  const parsed = parseReleaseTag(tag, registry);
+  if (parsed.kind === "legacy") {
+    if (area !== null && area !== parsed.area) {
+      throw new Error(`tag ${tag} selects ${parsed.area}, not ${area}`);
+    }
+    return [parsed.area];
+  }
+  if (area === null) {
+    throw new Error(
+      `release tag ${tag} covers selected areas; pass --area or run the coordinator`,
+    );
+  }
+  if (!registry.areas.some((entry) => entry.name === area)) {
+    throw new Error(`unknown area ${area}; add it to the area registry`);
+  }
+  return [area];
+}
+
+// The coordinator writes one plan before the matrix starts. A matrix worker
+// recomputes its own plan for race safety, but the package set it is allowed to
+// publish must still match the approved plan. Actions may differ: a version can
+// appear between the two runs and correctly become a skip.
+export function validateExpectedPlan(expected, fresh, area) {
+  const errors = [];
+  if (expected === null || typeof expected !== "object" || Array.isArray(expected)) {
+    return ["expected plan is not an object"];
+  }
+  if (!Array.isArray(expected.areas) || !expected.areas.includes(area)) {
+    errors.push(`expected plan does not include area ${area}`);
+  }
+  for (const registry of ["jsr", "npm"]) {
+    const list = expected[registry];
+    if (!Array.isArray(list)) {
+      errors.push(`expected plan.${registry} is not an array`);
+      continue;
+    }
+    const expectedEntries = list.filter(
+      (entry) =>
+        entry !== null &&
+        typeof entry === "object" &&
+        !Array.isArray(entry) &&
+        entry.area === area,
+    );
+    const freshEntries = fresh[registry];
+    if (!Array.isArray(freshEntries)) {
+      errors.push(`fresh plan.${registry} is not an array`);
+      continue;
+    }
+    if (expectedEntries.length !== freshEntries.length) {
+      errors.push(
+        `expected plan has ${expectedEntries.length} ${registry} package(s) for ${area}, ` +
+          `but the checkout has ${freshEntries.length}`,
+      );
+    }
+    const identity = (entry) =>
+      `${String(entry.name)}@${String(entry.version)} ${String(entry.dir)}`;
+    const expectedByName = new Map(
+      expectedEntries.map((entry) => [String(entry.name), entry]),
+    );
+    const freshByName = new Map(freshEntries.map((entry) => [String(entry.name), entry]));
+    for (const [name, entry] of expectedByName) {
+      const current = freshByName.get(name);
+      if (!current) {
+        errors.push(`expected plan has ${registry} ${name}, but the checkout does not`);
+        continue;
+      }
+      if (identity(entry) !== identity(current)) {
+        errors.push(
+          `expected plan ${identity(entry)} does not match checkout ${identity(current)}`,
+        );
+      }
+    }
+    for (const name of freshByName.keys()) {
+      if (!expectedByName.has(name)) {
+        errors.push(`checkout has ${registry} ${name}, but the expected plan does not`);
+      }
+    }
+  }
+  return errors;
 }
 
 export function integrityOfBuffer(bytes) {
@@ -202,7 +292,7 @@ export function discoverPackages(root, areas) {
   return discover(root, areas);
 }
 
-function jsrDependencies(packageInfo, byName) {
+export function jsrDependencies(packageInfo, byName) {
   const deps = new Set();
   for (const file of walk(packageInfo.dir, (path) => path.endsWith(".ts"))) {
     if (isTestFile(file) || isHarnessFile(file)) continue;
@@ -221,7 +311,7 @@ function jsrDependencies(packageInfo, byName) {
   return deps;
 }
 
-function npmDependencies(packageInfo, byName) {
+export function npmDependencies(packageInfo, byName) {
   const json = readJson(join(packageInfo.dir, "package.json"));
   const deps = new Set();
   for (const field of ["dependencies", "optionalDependencies"]) {
@@ -304,15 +394,60 @@ export async function jsrPackageMeta(name, fetchImpl) {
   return meta;
 }
 
-async function npmVersionState(name, version, fetchImpl) {
+// The npm version endpoint returns a document whose name and version identify
+// the exact version and whose dist object carries the tarball metadata. A 200
+// with `{}` or `null` is not an existing version; treat it as malformed so a
+// registry problem cannot turn into a skip.
+export function assertNpmVersionMetadata(meta, name, version) {
+  if (meta === null || typeof meta !== "object" || Array.isArray(meta)) {
+    throw new Error("malformed npm version metadata: expected an object");
+  }
+  if (meta.name !== name) {
+    throw new Error(`malformed npm version metadata: expected name ${name}`);
+  }
+  if (meta.version !== version) {
+    throw new Error(`malformed npm version metadata: expected version ${version}`);
+  }
+  const dist = meta.dist;
+  if (dist === null || typeof dist !== "object" || Array.isArray(dist)) {
+    throw new Error("malformed npm version metadata: dist must be an object");
+  }
+  if (
+    typeof dist.integrity !== "string" ||
+    !dist.integrity.startsWith("sha512-") ||
+    dist.integrity.length <= "sha512-".length
+  ) {
+    throw new Error(
+      "malformed npm version metadata: dist.integrity must be a sha512 string",
+    );
+  }
+  if (typeof dist.tarball !== "string" || dist.tarball.length === 0) {
+    throw new Error(
+      "malformed npm version metadata: dist.tarball must be a non-empty string",
+    );
+  }
+  return meta;
+}
+
+export async function npmVersionState(name, version, fetchImpl) {
   const url = `${NPM_ORIGIN}/${encodeURIComponent(name)}/${encodeURIComponent(version)}`;
   const response = await fetchImpl(url, { headers: { accept: "application/json" } });
   if (response.status === 404) return { exists: false };
   if (!response.ok) {
     throw new Error(`${url}: ${response.status} ${response.statusText}`);
   }
-  const json = await response.json();
-  return { exists: true, dist: json.dist ?? {} };
+  let json;
+  try {
+    json = await response.json();
+  } catch (error) {
+    throw new Error(`${url}: invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  try {
+    assertNpmVersionMetadata(json, name, version);
+  } catch (error) {
+    throw new Error(`${url}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  return { exists: true, dist: json.dist };
 }
 
 // ---------------------------------------------------------------------------
@@ -657,6 +792,8 @@ export function printPlan(plan) {
 function parseArgs(argv) {
   let mode = null;
   let planJson = null;
+  let area = null;
+  let expectPlan = null;
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index];
     if (arg === "preflight" || arg === "publish") {
@@ -669,29 +806,58 @@ function parseArgs(argv) {
       if (!planJson) throw new Error("--plan-json needs a path");
       continue;
     }
+    if (arg === "--area") {
+      area = argv[++index];
+      if (!area) throw new Error("--area needs a name");
+      continue;
+    }
+    if (arg === "--expect-plan") {
+      expectPlan = argv[++index];
+      if (!expectPlan) throw new Error("--expect-plan needs a path");
+      continue;
+    }
     throw new Error(`unknown argument ${arg}`);
   }
   if (mode === null) throw new Error("mode must be preflight or publish");
-  return { mode, planJson };
+  if (expectPlan !== null && mode !== "publish") {
+    throw new Error("--expect-plan is only valid with publish");
+  }
+  return { mode, planJson, area, expectPlan };
 }
 
 async function main() {
-  const { mode, planJson } = parseArgs(process.argv.slice(2));
+  const { mode, planJson, area, expectPlan } = parseArgs(process.argv.slice(2));
 
   const root = satelliteRoot();
-  const areas = areasForTag(process.env.RELEASE_TAG ?? "");
+  const tag = process.env.RELEASE_TAG ?? "";
+  // A legacy tag remains runnable from a checkout that predates the registry.
+  // A normal release tag must have the explicit registry so a new area cannot
+  // be selected from a built-in fallback.
+  const registry = RELEASE_TAG_PATTERN.test(tag)
+    ? loadAreaRegistry(root)
+    : loadAreaRegistry(root, { fallback: true });
+  const areas = resolvePublishAreas({ tag, area, registry });
   const tempRoot = mkdtempSync(join(tmpdir(), "js-lib-publish-"));
   try {
     const plan = await buildPlan({ root, areas, tempRoot });
+    const serialized = serializePlan(plan, root);
+    const expectedErrors = expectPlan
+      ? validateExpectedPlan(
+          JSON.parse(readFileSync(expectPlan, "utf8")),
+          serialized,
+          areas[0],
+        )
+      : [];
     printPlan(plan);
+    if (expectedErrors.length > 0) {
+      console.error("");
+      for (const error of expectedErrors) console.error(`error: ${error}`);
+    }
     if (planJson) {
       mkdirSync(dirname(planJson), { recursive: true });
-      writeFileSync(
-        planJson,
-        `${JSON.stringify(serializePlan(plan, root), null, 2)}\n`,
-      );
+      writeFileSync(planJson, `${JSON.stringify(serialized, null, 2)}\n`);
     }
-    if (plan.errors.length > 0) {
+    if (plan.errors.length > 0 || expectedErrors.length > 0) {
       process.exitCode = 1;
       return;
     }

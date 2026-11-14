@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 import {
   areasForTag,
   assertJsrPackageMeta,
+  assertNpmVersionMetadata,
   buildPlan,
   checkVersionPairs,
   denoPublishSkipKind,
@@ -14,6 +15,7 @@ import {
   distTag,
   executePlan,
   jsrPackageMeta,
+  npmVersionState,
   sameNpmArtifact,
   serializePlan,
   topoSort,
@@ -322,6 +324,56 @@ test("jsrPackageMeta distinguishes HTTP 404 from a 200 JSON null", async () => {
         jsonResponse({ scope: "neotales", name: "chars", versions: {} }),
     ),
     { scope: "neotales", name: "chars", versions: {} },
+  );
+});
+
+test("npm version metadata requires the exact name, version, integrity and tarball", async () => {
+  const name = "@neotales/chars";
+  const version = "0.1.0-alpha.0";
+  const valid = {
+    name,
+    version,
+    dist: {
+      integrity: "sha512-abc",
+      tarball: "https://registry.npmjs.org/example.tgz",
+    },
+  };
+  assert.equal(assertNpmVersionMetadata(valid, name, version), valid);
+  assert.deepEqual(
+    await npmVersionState(name, version, async () => jsonResponse(valid)),
+    { exists: true, dist: valid.dist },
+  );
+  assert.deepEqual(
+    await npmVersionState(name, version, async () => new Response("", { status: 404 })),
+    { exists: false },
+  );
+
+  const bad = [
+    null,
+    [],
+    {},
+    { ...valid, name: "@neotales/other" },
+    { ...valid, version: "9.9.9" },
+    { name, version },
+    { name, version, dist: {} },
+    { name, version, dist: { integrity: "sha512-abc" } },
+    { name, version, dist: { integrity: 5, tarball: "https://example.tgz" } },
+    { name, version, dist: { integrity: "md5-abc", tarball: "https://example.tgz" } },
+  ];
+  for (const value of bad) {
+    assert.throws(
+      () => assertNpmVersionMetadata(value, name, version),
+      /malformed npm version metadata/,
+      JSON.stringify(value),
+    );
+  }
+  await assert.rejects(
+    () => npmVersionState(name, version, async () => jsonResponse({})),
+    /malformed npm version metadata/,
+  );
+  await assert.rejects(
+    () => npmVersionState(name, version, async () => new Response("null", { status: 200 })),
+    /malformed npm version metadata/,
   );
 });
 
