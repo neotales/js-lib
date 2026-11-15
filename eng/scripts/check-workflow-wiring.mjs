@@ -3,7 +3,10 @@
 // missing step id or job outputs mapping makes needs.plan.outputs.* empty and
 // silently skips every publish job. The trigger check proves a release tag
 // starts js-cd.yml only. The shell check proves a Windows job's `run:` block
-// asks for bash instead of the default PowerShell.
+// asks for bash instead of the default PowerShell. The platform check proves
+// the npm package preflight carries the one reviewed Linux gate inside a
+// three-OS matrix, because spawnSync("npm") is ENOENT on Windows where npm is
+// npm.cmd.
 //
 // The check reads the workflow as text. It is deliberately dependency-free so
 // it runs in the same Node gate as the release scripts.
@@ -35,6 +38,17 @@ const TAG_SAMPLES = [
 // default shell is PowerShell, so a block scalar or one of these constructs
 // needs an explicit `shell: bash`.
 const BASH_ISMS = /set -euo pipefail|\bcase\s+[^\n]*\bin\b|\besac\b|\[\[|(^|[\s;])fi([\s;]|$)/;
+
+// The package preflight shells out to npm, which is npm.cmd on Windows and is
+// not resolved without a shell, so spawnSync("npm") is ENOENT there. Package
+// contents do not depend on the runner OS. The reviewed gate is the exact
+// expression js-std-ci.yml and js-os-ci.yml already use, and the test job
+// keeps a three-OS matrix so the Linux leg is always present. This checker
+// compares that one expression and matrix; it does not interpret GitHub
+// expressions, so a rewrite must be reviewed here rather than guessed at.
+const PACKAGE_PREFLIGHT = "node eng/scripts/check-publish.mjs";
+export const LINUX_GATE = "${{ !cancelled() && runner.os == 'Linux' }}";
+const REQUIRED_MATRIX_OS = ["ubuntu-24.04", "macos-latest", "windows-latest"];
 
 // Branch names a CI push filter must admit. `fix/...` proves `**` and `*`
 // differ; `rt-*` is the runtime-branch convention; `dev` and `plab-js-lib` are
@@ -355,6 +369,23 @@ function findStepEnd(lines, stepIndex, upperBound) {
   return upperBound;
 }
 
+function stepName(step) {
+  const nameLine = step.find((line) => /^\s*-\s*name:/.test(line)) ?? "";
+  return (
+    nameLine.replace(/^\s*-\s*name:\s*/, "").replace(/^["']|["']$/g, "") ||
+    "unnamed step"
+  );
+}
+
+// The single-line `if:` value of a step, or null when it has none. A folded or
+// literal block scalar is not unfolded: the gate is one reviewed line, and a
+// block form is refused like any other unproven expression.
+function stepIf(step) {
+  const line = step.find((entry) => /^\s*if:/.test(entry));
+  if (line === undefined) return null;
+  return line.trimStart().slice("if:".length).trim();
+}
+
 // Shell regression: in a job whose matrix runs windows-latest, a multi-line
 // `run` block, or one using bash-only syntax, must set `shell: bash`.
 // Otherwise Windows runs it under PowerShell and the parser fails before the
@@ -385,14 +416,122 @@ export function checkWorkflowShells(text, label = "workflow") {
       const value = match[2].trim();
       const blockScalar = /^[|>][+-]?$/.test(value);
       if (!blockScalar && !BASH_ISMS.test(value)) continue;
-      const nameLine = step.find((line) => /^\s*-\s*name:/.test(line)) ?? "";
-      const stepName =
-        nameLine.replace(/^\s*-\s*name:\s*/, "").replace(/^["']|["']$/g, "") ||
-        "unnamed step";
       errors.push(
-        `${label}: step "${stepName}" in Windows job "${jobName}" needs shell: bash; the Windows default is PowerShell`,
+        `${label}: step "${stepName(step)}" in Windows job "${jobName}" needs shell: bash; the Windows default is PowerShell`,
       );
     }
+  }
+  return errors;
+}
+
+// Collapse whitespace around the operators of the one gate expression so
+// `${{!cancelled()&&runner.os=='Linux'}}` matches the reviewed form, while
+// anything else (a different operator, path, operand, or a block scalar) does
+// not. Returning null means the value is not a `${{ ... }}` expression.
+export function normalizeGate(condition) {
+  if (condition === null) return null;
+  const wrapped = /^\$\{\{([\s\S]*)\}\}$/.exec(condition);
+  if (!wrapped) return null;
+  return wrapped[1]
+    .trim()
+    .replace(/\s*(&&|\|\||==|!=)\s*/g, "$1")
+    .replace(/\s*([!()])\s*/g, "$1");
+}
+
+const LINUX_GATE_NORMALIZED = normalizeGate(LINUX_GATE);
+
+// The inline os list of a job matrix, or null.
+function matrixOs(job) {
+  const line = job.find((entry) => /^\s+os:\s*\[.*\]\s*(?:#.*)?$/.test(entry));
+  if (line === undefined) return null;
+  return line
+    .replace(/^\s*os:\s*\[/, "")
+    .replace(/\]\s*(?:#.*)?$/, "")
+    .split(",")
+    .map((value) => value.trim().replace(/^["']|["']$/g, ""))
+    .filter(Boolean);
+}
+
+// An `exclude:` can drop a required leg without changing the os list, so the
+// required matrix refuses the key whatever its value: a block list, an inline
+// flow list, or a single mapping. `include:` is not supported either, but it
+// can only add legs, so it is not refused here.
+function matrixExcludes(job) {
+  if (/matrix:[^\n]*\bexclude\s*:/.test(job.join("\n"))) return true;
+  const matrixIndex = job.findIndex((line) => /^\s+matrix:\s*$/.test(line));
+  if (matrixIndex === -1) return false;
+  const indent = indentOf(job[matrixIndex]);
+  for (let index = matrixIndex + 1; index < job.length; index++) {
+    const line = job[index];
+    if (line.trim() === "") continue;
+    if (indentOf(line) <= indent) break;
+    if (/^\s*exclude\s*:/.test(line)) return true;
+  }
+  return false;
+}
+
+// Platform regression: the package preflight must carry exactly the reviewed
+// Linux gate, in a job that really runs on the three-OS matrix. Refusing
+// anything not provably equivalent is deliberate: there is no expression
+// interpreter here to disagree with GitHub.
+export function checkWorkflowPlatformGates(text, label = "workflow") {
+  const errors = [];
+  const lines = text.split("\n");
+  const jobsIndex = lines.findIndex((line) => line === "jobs:");
+  if (jobsIndex === -1) return [`${label}: no jobs:`];
+  const headers = [];
+  for (let index = jobsIndex + 1; index < lines.length; index++) {
+    if (/^  [A-Za-z0-9_-]+:\s*$/.test(lines[index])) headers.push(index);
+  }
+  headers.push(lines.length);
+
+  let linuxLeg = 0;
+  for (let header = 0; header < headers.length - 1; header++) {
+    const start = headers[header];
+    const end = headers[header + 1];
+    const job = lines.slice(start, end);
+    const jobName = lines[start].trim().replace(/:$/, "");
+    for (let index = start; index < end; index++) {
+      const run = /^(\s*)run:\s*(.*)$/.exec(lines[index]);
+      if (!run || !run[2].includes("check-publish.mjs")) continue;
+      const stepStart = findStepStart(lines, index, start);
+      if (stepStart === -1) continue;
+      const step = lines.slice(stepStart, findStepEnd(lines, stepStart, end));
+      const name = stepName(step);
+
+      const condition = stepIf(step);
+      if (normalizeGate(condition) !== LINUX_GATE_NORMALIZED) {
+        errors.push(
+          `${label}: step "${name}" in job "${jobName}" must gate the package preflight with exactly ${LINUX_GATE}; got ${condition === null ? "no if:" : `if: ${condition}`}`,
+        );
+      }
+
+      if (!/^    runs-on:\s*\$\{\{\s*matrix\.os\s*\}\}\s*$/m.test(job.join("\n"))) {
+        errors.push(
+          `${label}: job "${jobName}" must run on \${{ matrix.os }} so the Linux gate is a real runner`,
+        );
+      }
+      if (matrixExcludes(job)) {
+        errors.push(
+          `${label}: job "${jobName}" must not use matrix.exclude; the package preflight needs all of ${REQUIRED_MATRIX_OS.join(", ")}`,
+        );
+      }
+      const os = matrixOs(job);
+      const missing = REQUIRED_MATRIX_OS.filter((entry) => !os?.includes(entry));
+      if (missing.length > 0) {
+        errors.push(
+          `${label}: job "${jobName}" must keep ${REQUIRED_MATRIX_OS.join(", ")} in its os matrix; found ${os === null ? "none" : os.join(", ")}`,
+        );
+      } else {
+        linuxLeg++;
+      }
+    }
+  }
+
+  if (basename(label) === "js-cd.yml" && linuxLeg === 0) {
+    errors.push(
+      `${label}: the release must run ${PACKAGE_PREFLIGHT} on the ubuntu-24.04 leg of the ${REQUIRED_MATRIX_OS.join("/")} matrix`,
+    );
   }
   return errors;
 }
@@ -551,6 +690,7 @@ function main() {
       for (const error of [
         ...checkWorkflowTriggers(text, path),
         ...checkWorkflowShells(text, path),
+        ...checkWorkflowPlatformGates(text, path),
       ]) {
         console.error(error);
         failed++;

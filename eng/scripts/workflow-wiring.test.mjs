@@ -3,11 +3,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
+  LINUX_GATE,
+  checkWorkflowPlatformGates,
   checkWorkflowShells,
   checkWorkflowTriggers,
   checkWorkflowWiring,
   githubGlobMatches,
   jsWorkflowPaths,
+  normalizeGate,
   pushEventAllows,
   refFiltersAllow,
   workflowWiringPaths,
@@ -58,13 +61,14 @@ test("the wiring check rejects a missing step id", () => {
   );
 });
 
-test("every js workflow passes the tag-trigger and Windows-shell rules", () => {
+test("every js workflow passes the tag-trigger, Windows-shell and platform rules", () => {
   const paths = jsWorkflowPaths();
   assert.ok(paths.length >= 4, `expected the satellite workflows, found ${paths.length}`);
   for (const path of paths) {
     const text = readFileSync(path, "utf8");
     assert.deepEqual(checkWorkflowTriggers(text, path), [], path);
     assert.deepEqual(checkWorkflowShells(text, path), [], path);
+    assert.deepEqual(checkWorkflowPlatformGates(text, path), [], path);
   }
 });
 
@@ -221,6 +225,151 @@ test("the shell check rejects the tag guard without shell: bash", () => {
   assert.match(
     checkWorkflowShells(text, path).join("\n"),
     /step "Check the tag" in Windows job "test" needs shell: bash/,
+  );
+});
+
+test("both js-cd copies keep the reviewed Linux gate in a three-OS test job", () => {
+  const paths = workflowWiringPaths();
+  assert.ok(paths.length >= 1, "no js-cd.yml workflow found");
+  for (const path of paths) {
+    const text = readFileSync(path, "utf8");
+    const step =
+      /- name: Refuse a package that still contains tests\n(?:.*\n)*?        run: node eng\/scripts\/check-publish\.mjs\n/.exec(
+        text,
+      );
+    assert.ok(step, `${path}: package preflight step missing`);
+    const condition = /^\s*if: (.*)$/m.exec(step[0]);
+    assert.ok(condition, `${path}: package preflight step has no if:`);
+    assert.equal(
+      normalizeGate(condition[1]),
+      normalizeGate(LINUX_GATE),
+      `${path}: package preflight must keep the reviewed Linux gate`,
+    );
+    assert.match(text, /^    runs-on: \$\{\{ matrix\.os \}\}$/m, path);
+    assert.match(
+      text,
+      /^        os: \[ubuntu-24\.04, macos-latest, windows-latest\]$/m,
+      path,
+    );
+    assert.deepEqual(checkWorkflowPlatformGates(text, path), [], path);
+  }
+});
+
+test("the platform check accepts equivalent whitespace in the reviewed gate", () => {
+  const path = workflowWiringPaths()[0];
+  const text = readFileSync(path, "utf8").replace(
+    "if: ${{ !cancelled() && runner.os == 'Linux' }}",
+    "if: ${{!cancelled()&&runner.os=='Linux'}}",
+  );
+  assert.deepEqual(checkWorkflowPlatformGates(text, path), []);
+});
+
+test("the platform check rejects an ungated package preflight in a Windows job", () => {
+  const path = workflowWiringPaths()[0];
+  const text = readFileSync(path, "utf8").replace(
+    "        if: ${{ !cancelled() && runner.os == 'Linux' }}\n",
+    "",
+  );
+  const errors = checkWorkflowPlatformGates(text, path).join("\n");
+  assert.match(
+    errors,
+    /step "Refuse a package that still contains tests" in job "test" must gate the package preflight with exactly/,
+  );
+  assert.match(errors, /got no if:/);
+});
+
+test("the platform check rejects a gate that excludes Linux", () => {
+  const path = workflowWiringPaths()[0];
+  const text = readFileSync(path, "utf8").replace(
+    "runner.os == 'Linux'",
+    "runner.os != 'Linux'",
+  );
+  assert.match(
+    checkWorkflowPlatformGates(text, path).join("\n"),
+    /got if: \$\{\{ !cancelled\(\) && runner\.os != 'Linux' \}\}/,
+  );
+});
+
+test("the platform check rejects an unknown github.ref_name inequality", () => {
+  const path = workflowWiringPaths()[0];
+  const text = readFileSync(path, "utf8").replace(
+    "        if: ${{ !cancelled() && runner.os == 'Linux' }}\n",
+    "        if: ${{ github.ref_name != 'v2026.11.14-r.2' }}\n",
+  );
+  const errors = checkWorkflowPlatformGates(text, path).join("\n");
+  assert.match(errors, /must gate the package preflight with exactly/);
+  assert.match(errors, /github\.ref_name != 'v2026\.11\.14-r\.2'/);
+});
+
+test("the platform check rejects a folded if: block as unsupported", () => {
+  const path = workflowWiringPaths()[0];
+  const text = readFileSync(path, "utf8").replace(
+    "        if: ${{ !cancelled() && runner.os == 'Linux' }}\n",
+    "        if: >-\n          !cancelled() &&\n          runner.os == 'Linux'\n",
+  );
+  const errors = checkWorkflowPlatformGates(text, path).join("\n");
+  assert.match(errors, /must gate the package preflight with exactly/);
+  assert.match(errors, /got if: >-/);
+});
+
+test("the platform check rejects a changed matrix label", () => {
+  const path = workflowWiringPaths()[0];
+  const text = readFileSync(path, "utf8").replace(
+    "os: [ubuntu-24.04, macos-latest, windows-latest]",
+    "os: [ubuntu-22.04, macos-latest, windows-latest]",
+  );
+  assert.match(
+    checkWorkflowPlatformGates(text, path).join("\n"),
+    /must keep ubuntu-24\.04, macos-latest, windows-latest in its os matrix; found ubuntu-22\.04, macos-latest, windows-latest/,
+  );
+});
+
+test("the platform check rejects matrix.exclude that could drop the Linux leg", () => {
+  const path = workflowWiringPaths()[0];
+  const text = readFileSync(path, "utf8").replace(
+    "        os: [ubuntu-24.04, macos-latest, windows-latest]\n",
+    "        os: [ubuntu-24.04, macos-latest, windows-latest]\n        exclude:\n          - os: ubuntu-24.04\n",
+  );
+  assert.match(
+    checkWorkflowPlatformGates(text, path).join("\n"),
+    /must not use matrix\.exclude; the package preflight needs all of ubuntu-24\.04, macos-latest, windows-latest/,
+  );
+});
+
+test("the platform check rejects an inline matrix.exclude too", () => {
+  const path = workflowWiringPaths()[0];
+  const text = readFileSync(path, "utf8").replace(
+    "        os: [ubuntu-24.04, macos-latest, windows-latest]\n",
+    "        os: [ubuntu-24.04, macos-latest, windows-latest]\n        exclude: [{os: ubuntu-24.04}]\n",
+  );
+  assert.match(
+    checkWorkflowPlatformGates(text, path).join("\n"),
+    /must not use matrix\.exclude; the package preflight needs all of ubuntu-24\.04, macos-latest, windows-latest/,
+  );
+});
+
+test("the platform check rejects a test job that does not run on matrix.os", () => {
+  const path = workflowWiringPaths()[0];
+  const text = readFileSync(path, "utf8").replace(
+    "    runs-on: ${{ matrix.os }}",
+    "    runs-on: windows-latest",
+  );
+  assert.match(
+    checkWorkflowPlatformGates(text, path).join("\n"),
+    /must run on \$\{\{ matrix\.os \}\} so the Linux gate is a real runner/,
+  );
+});
+
+test("the platform check refuses a release that dropped the package preflight", () => {
+  const path = workflowWiringPaths()[0];
+  const text = readFileSync(path, "utf8").replace(
+    /- name: Refuse a package that still contains tests\n(?:.*\n)*?        run: node eng\/scripts\/check-publish\.mjs\n/,
+    "",
+  );
+  assert.doesNotMatch(text, /check-publish\.mjs/);
+  assert.match(
+    checkWorkflowPlatformGates(text, path).join("\n"),
+    /must run node eng\/scripts\/check-publish\.mjs on the ubuntu-24\.04 leg/,
   );
 });
 

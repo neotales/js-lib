@@ -83,7 +83,12 @@ jobs:
         with:
           deno-version: v2.9.8
 
+      # The guard spawns npm, which is npm.cmd on Windows, so spawnSync("npm")
+      # is ENOENT there. Package contents are platform independent, and the
+      # Linux leg always runs, so the guard is Linux-only like the same step in
+      # js-std-ci.yml and js-os-ci.yml. The runtime lanes below stay all-OS.
       - name: Refuse a package that still contains tests
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: node eng/scripts/check-publish.mjs
 
       - name: Refuse a stale ende.json

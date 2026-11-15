@@ -32,6 +32,21 @@ whether it comes before or after `run:`. `eng/scripts/workflow-wiring.test.mjs`
 covers the failures, including a workflow mutated to drop the branch filter,
 cancel it with ordered negation, or lose the shell.
 
+The npm package preflight (`check-publish.mjs`) spawns `npm`. npm is a shell
+script on Linux and macOS but `npm.cmd` on Windows, and `spawnSync("npm")` does
+not search `PATHEXT`, so on run 43659324489 the windows-latest leg failed with
+`spawnSync npm ENOENT` and the release stopped before `plan`. Package contents
+do not depend on the runner OS, so `js-cd.yml` gates that step with
+`if: ${{ !cancelled() && runner.os == 'Linux' }}`, the same gate
+`js-std-ci.yml` and `js-os-ci.yml` already use. The Linux leg of the release
+matrix always runs it; the runtime test lanes still run on every OS.
+`check-workflow-wiring.mjs` compares the step's `if:` with that one reviewed
+line and requires the test job to run on `${{ matrix.os }}` with
+`ubuntu-24.04`, `macos-latest`, and `windows-latest` in its `os` list; a
+rewritten condition, a changed matrix label, a `matrix.exclude`, or a dropped
+step fails `workflow-wiring.test.mjs`. It does not interpret arbitrary GitHub
+expressions.
+
 ## Release ref guard
 
 A release is a tag push. Before tests and again before publishing, the workflow checks out
@@ -144,7 +159,8 @@ The plan job exposes `has_areas`, `matrix`, and `plan` as GitHub Actions job out
 `release_plan` step. `eng/scripts/check-workflow-wiring.mjs` and
 `eng/scripts/workflow-wiring.test.mjs` check every `js-cd.yml` copy in the checkout (both in the
 monorepo), so a missing step id or outputs mapping cannot silently skip every publish job. The same
-checker enforces the tag/branch trigger split and `shell: bash` on Windows jobs.
+checker enforces the tag/branch trigger split, `shell: bash` on Windows jobs, and the Linux gate on
+the npm package preflight.
 
 A legacy area tag (`std/v*`, `js/v*`, `os/v*`) still resolves without `--area`. It selects exactly
 one area and uses the previous area tag for its notes, preserving the old behaviour.
