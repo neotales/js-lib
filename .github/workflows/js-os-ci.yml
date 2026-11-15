@@ -1,8 +1,12 @@
 # Test os. Publishing is js-cd.yml. Action pin checks are js-check-actions.yml.
 name: js-os-ci
 
+# A push filter with paths but no branches also matches a tag, so a release tag
+# would start this workflow alongside js-cd.yml. `branches: ["**"]` matches
+# every branch and no tag. Publishing itself stays in js-cd.yml.
 on:
   push:
+    branches: ["**"]
     paths:
       - "os/**"
       - "eng/**"

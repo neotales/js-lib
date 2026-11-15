@@ -1,13 +1,16 @@
-// Check that js-cd.yml exposes the coordinator's plan outputs and that the
-// publish matrix consumes them. A missing step id or job outputs mapping makes
-// needs.plan.outputs.* empty and silently skips every publish job.
+// Check the js workflows. The wiring check proves js-cd.yml exposes the
+// coordinator's plan outputs and that the publish matrix consumes them: a
+// missing step id or job outputs mapping makes needs.plan.outputs.* empty and
+// silently skips every publish job. The trigger check proves a release tag
+// starts js-cd.yml only. The shell check proves a Windows job's `run:` block
+// asks for bash instead of the default PowerShell.
 //
 // The check reads the workflow as text. It is deliberately dependency-free so
 // it runs in the same Node gate as the release scripts.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { basename, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const TAG_TRIGGERS = [
@@ -18,6 +21,32 @@ const TAG_TRIGGERS = [
 ];
 
 const OUTPUT_KEYS = ["has_areas", "matrix", "plan"];
+
+// One sample per tag family js-cd.yml accepts. A tag starts the release and
+// must not start a branch workflow.
+const TAG_SAMPLES = [
+  "v2026.11.14-r.1",
+  "std/v2026.11.14-r.1",
+  "js/v2026.11.14-r.1",
+  "os/v2026.11.14-r.1",
+];
+
+// Shell syntax that PowerShell parses differently. On a Windows runner the
+// default shell is PowerShell, so a block scalar or one of these constructs
+// needs an explicit `shell: bash`.
+const BASH_ISMS = /set -euo pipefail|\bcase\s+[^\n]*\bin\b|\besac\b|\[\[|(^|[\s;])fi([\s;]|$)/;
+
+// Branch names a CI push filter must admit. `fix/...` proves `**` and `*`
+// differ; `rt-*` is the runtime-branch convention; `dev` and `plab-js-lib` are
+// the integration names. The root copies are intentionally scoped to
+// plab-js-lib only, so they are checked against that one name.
+const REPRESENTATIVE_BRANCHES = [
+  "dev",
+  "plab-js-lib",
+  "rt-txiki",
+  "fix/node-lane-target",
+];
+const ROOT_REPRESENTATIVE_BRANCHES = ["plab-js-lib"];
 
 export function workflowWiringPaths() {
   const satellite = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -37,6 +66,335 @@ export function workflowWiringPaths() {
     if (rootWorkflow !== satelliteWorkflow) paths.push(rootWorkflow);
   }
   return paths.filter((path) => existsSync(path));
+}
+
+// Every js workflow in the satellite and, when this checkout is the monorepo,
+// the root copy that publishes and tests js/lib.
+export function jsWorkflowPaths() {
+  const satellite = resolve(fileURLToPath(new URL("../..", import.meta.url)));
+  const dirs = [join(satellite, ".github/workflows")];
+  const root = spawnSync(
+    "git",
+    ["-C", satellite, "rev-parse", "--show-toplevel"],
+    { encoding: "utf8" },
+  );
+  if (root.status === 0 && root.stdout.trim()) {
+    dirs.push(join(resolve(root.stdout.trim()), ".github/workflows"));
+  }
+  const seen = new Set();
+  const paths = [];
+  for (const dir of dirs) {
+    if (!existsSync(dir)) continue;
+    for (const entry of readdirSync(dir)) {
+      if (!/^js-.*\.ya?ml$/.test(entry)) continue;
+      const path = join(dir, entry);
+      if (seen.has(path)) continue;
+      seen.add(path);
+      paths.push(path);
+    }
+  }
+  return paths.sort();
+}
+
+function indentOf(line) {
+  return line.length - line.trimStart().length;
+}
+
+// The header line and everything more indented than parentIndent.
+function sectionAfter(lines, index, parentIndent) {
+  const out = [lines[index]];
+  for (let cursor = index + 1; cursor < lines.length; cursor++) {
+    const line = lines[cursor];
+    if (line.trim() === "") {
+      out.push(line);
+      continue;
+    }
+    if (indentOf(line) <= parentIndent) break;
+    out.push(line);
+  }
+  return out;
+}
+
+// A `branches:` or `tags:` list, inline or block form.
+function filterList(section, key) {
+  const start = section.findIndex((line) => {
+    const trimmed = line.trimStart();
+    return indentOf(line) === 4 && trimmed.startsWith(`${key}:`);
+  });
+  if (start === -1) return null;
+  const rest = section[start].trimStart().slice(key.length + 1).trim();
+  const unquote = (value) =>
+    value.trim().replace(/^["']/, "").replace(/["']$/, "");
+  if (rest.startsWith("[")) {
+    return rest
+      .replace(/^\[/, "")
+      .replace(/\]\s*$/, "")
+      .split(",")
+      .map(unquote)
+      .filter(Boolean);
+  }
+  if (rest) return [unquote(rest.replace(/\s+#.*$/, ""))];
+  const values = [];
+  for (let index = start + 1; index < section.length; index++) {
+    const line = section[index];
+    if (line.trim() === "") continue;
+    if (indentOf(line) <= 4) break;
+    const match = /^\s*-\s*(.+)$/.exec(line);
+    if (match) values.push(unquote(match[1].replace(/\s+#.*$/, "")));
+  }
+  return values;
+}
+
+// GitHub ref glob: `*` and `?` stop at `/`, `**` crosses it, `[...]` is a
+// character class. Used to prove a branch filter never matches a tag name.
+export function githubGlobMatches(pattern, value) {
+  let source = "^";
+  for (let index = 0; index < pattern.length; index++) {
+    const char = pattern[index];
+    if (char === "*") {
+      if (pattern[index + 1] === "*") {
+        source += ".*";
+        index++;
+      } else {
+        source += "[^/]*";
+      }
+    } else if (char === "?") {
+      source += "[^/]";
+    } else if (char === "[") {
+      const end = pattern.indexOf("]", index + 1);
+      if (end === -1) {
+        source += "\\[";
+      } else {
+        source += pattern.slice(index, end + 1);
+        index = end;
+      }
+    } else {
+      source += char.replace(/[.+^${}()|\\]/g, "\\$&");
+    }
+  }
+  return new RegExp(`${source}$`).test(value);
+}
+
+// Ordered branch/tag filter: a positive match includes, a later `!` match
+// excludes, and a still later positive match includes again. A list with no
+// positive pattern selects nothing, so `["**", "!**"]` excludes every ref.
+export function refFiltersAllow(patterns, name) {
+  let allowed = false;
+  for (const pattern of patterns) {
+    if (pattern.startsWith("!")) {
+      if (githubGlobMatches(pattern.slice(1), name)) allowed = false;
+    } else if (githubGlobMatches(pattern, name)) {
+      allowed = true;
+    }
+  }
+  return allowed;
+}
+
+// Would a push event with this `on.push` block start the workflow for ref?
+// GitHub matches `branches` against branch names and `tags` against tag names.
+// If only one is defined, the other ref type does not trigger at all. With
+// neither, a `paths` filter alone matches branches and tags.
+export function pushEventAllows(text, ref) {
+  const lines = text.split("\n");
+  const onIndex = lines.findIndex((line) => line === "on:");
+  if (onIndex === -1) return false;
+  const onSection = sectionAfter(lines, onIndex, 0);
+  const pushIndex = onSection.findIndex(
+    (line) => indentOf(line) === 2 && line.trim() === "push:",
+  );
+  if (pushIndex === -1) return false;
+  const push = sectionAfter(onSection, pushIndex, 2);
+  const branches = filterList(push, "branches");
+  const tags = filterList(push, "tags");
+  // A paths-only push declares no ref filter at all. GitHub then starts the
+  // workflow for branch and tag pushes, and a tag push ignores `paths`
+  // entirely. That is why a CI workflow needs an explicit `branches`.
+  if (!branches && !tags) return true;
+  const isTag = ref.startsWith("refs/tags/");
+  const name = ref.replace(/^refs\/(tags|heads)\//, "");
+  if (isTag) {
+    if (!tags) return false;
+    return refFiltersAllow(tags, name);
+  }
+  if (!branches) return false;
+  return refFiltersAllow(branches, name);
+}
+
+function satelliteRoot() {
+  return resolve(fileURLToPath(new URL("../..", import.meta.url)));
+}
+
+// True for a workflow inside the published prefix. In the monorepo the root
+// copies live outside js/lib; in the satellite checkout every workflow is in
+// the prefix, so the branch-filter rule applies to all of them there.
+function satelliteCopy(label) {
+  const workflows = `${join(satelliteRoot(), ".github", "workflows")}${sep}`;
+  return resolve(label).startsWith(workflows);
+}
+
+// Trigger regression: a release tag must start js-cd.yml only. Every other js
+// workflow that pushes must declare `branches`, because `paths` alone also
+// matches tags. js-cd.yml must keep `tags` and must not declare `branches`.
+export function checkWorkflowTriggers(text, label = "workflow") {
+  const errors = [];
+  const name = basename(label);
+  const lines = text.split("\n");
+  const onIndex = lines.findIndex((line) => line === "on:");
+  if (onIndex === -1) {
+    errors.push(`${label}: no on: triggers`);
+    return errors;
+  }
+  const onSection = sectionAfter(lines, onIndex, 0);
+  const pushIndex = onSection.findIndex(
+    (line) => indentOf(line) === 2 && line.trim() === "push:",
+  );
+  const push = pushIndex === -1 ? null : sectionAfter(onSection, pushIndex, 2);
+  const isCd = name === "js-cd.yml";
+  const branchCi = name === "js-std-ci.yml" || name === "js-os-ci.yml";
+
+  if (isCd) {
+    if (!push) {
+      errors.push(`${label}: js-cd.yml must trigger on tag pushes`);
+      return errors;
+    }
+    const tags = filterList(push, "tags");
+    const branches = filterList(push, "branches");
+    if (!tags) {
+      errors.push(`${label}: push must declare tags; js-cd.yml releases only from a tag`);
+    } else {
+      for (const tag of TAG_TRIGGERS) {
+        if (!tags.includes(tag)) {
+          errors.push(`${label}: missing tag trigger ${tag}`);
+        }
+      }
+    }
+    if (branches) {
+      errors.push(
+        `${label}: push must not declare branches; a branch push would run the release`,
+      );
+    }
+    for (const tag of TAG_SAMPLES) {
+      const ref = `refs/tags/${tag}`;
+      if (!pushEventAllows(text, ref)) {
+        errors.push(`${label}: ${ref} must start the release`);
+      }
+    }
+    if (pushEventAllows(text, "refs/heads/dev")) {
+      errors.push(`${label}: a branch push must not start the release`);
+    }
+    return errors;
+  }
+
+  if (branchCi && !push) {
+    errors.push(
+      `${label}: push trigger missing; branch CI must run on a branch push`,
+    );
+  }
+  if (push) {
+    const branches = filterList(push, "branches");
+    const tags = filterList(push, "tags");
+    if (tags) {
+      errors.push(`${label}: push must not declare tags; tags release through js-cd.yml`);
+    }
+    if (!branches) {
+      errors.push(`${label}: push must declare branches; with only paths a tag push also starts CI`);
+    } else if (!branches.some((pattern) => !pattern.startsWith("!"))) {
+      errors.push(
+        `${label}: push branches need at least one positive pattern; a negated-only list selects nothing`,
+      );
+    } else {
+      const required = satelliteCopy(label)
+        ? REPRESENTATIVE_BRANCHES
+        : ROOT_REPRESENTATIVE_BRANCHES;
+      const missing = required.filter(
+        (branch) => !refFiltersAllow(branches, branch),
+      );
+      if (missing.length === required.length) {
+        errors.push(
+          `${label}: push branches exclude every representative branch (${required.join(", ")}); an ordered negation can cancel an earlier match`,
+        );
+      } else if (missing.length > 0) {
+        errors.push(
+          `${label}: push branches do not admit ${missing.join(", ")}`,
+        );
+      }
+    }
+    for (const tag of TAG_SAMPLES) {
+      const ref = `refs/tags/${tag}`;
+      if (pushEventAllows(text, ref)) {
+        errors.push(`${label}: ${ref} must not start CI; it releases through js-cd.yml`);
+      }
+    }
+  }
+  if (
+    (name === "js-std-ci.yml" || name === "js-os-ci.yml") &&
+    !onSection.some((line) => indentOf(line) === 2 && line.trim() === "pull_request:")
+  ) {
+    errors.push(`${label}: pull_request trigger missing`);
+  }
+  return errors;
+}
+
+function findStepStart(lines, runIndex, lowerBound) {
+  const runIndent = indentOf(lines[runIndex]);
+  for (let index = runIndex - 1; index >= lowerBound; index--) {
+    const match = /^(\s*)-\s/.exec(lines[index]);
+    if (match && match[1].length < runIndent) return index;
+  }
+  return -1;
+}
+
+// The whole step, including keys that follow its `run:` block. `shell:` may
+// legally come after `run:` in YAML, and that still selects bash.
+function findStepEnd(lines, stepIndex, upperBound) {
+  const stepIndent = indentOf(lines[stepIndex]);
+  for (let index = stepIndex + 1; index < upperBound; index++) {
+    const match = /^(\s*)-\s/.exec(lines[index]);
+    if (match && match[1].length <= stepIndent) return index;
+  }
+  return upperBound;
+}
+
+// Shell regression: in a job whose matrix runs windows-latest, a multi-line
+// `run` block, or one using bash-only syntax, must set `shell: bash`.
+// Otherwise Windows runs it under PowerShell and the parser fails before the
+// first command.
+export function checkWorkflowShells(text, label = "workflow") {
+  const errors = [];
+  const lines = text.split("\n");
+  const jobsIndex = lines.findIndex((line) => line === "jobs:");
+  if (jobsIndex === -1) return [`${label}: no jobs:`];
+  const headers = [];
+  for (let index = jobsIndex + 1; index < lines.length; index++) {
+    if (/^  [A-Za-z0-9_-]+:\s*$/.test(lines[index])) headers.push(index);
+  }
+  headers.push(lines.length);
+  for (let header = 0; header < headers.length - 1; header++) {
+    const start = headers[header];
+    const end = headers[header + 1];
+    const jobText = lines.slice(start, end).join("\n");
+    if (!/windows-latest/.test(jobText)) continue;
+    const jobName = lines[start].trim().replace(/:$/, "");
+    for (let index = start; index < end; index++) {
+      const match = /^(\s*)run:\s*(.*)$/.exec(lines[index]);
+      if (!match) continue;
+      const stepStart = findStepStart(lines, index, start);
+      if (stepStart === -1) continue;
+      const step = lines.slice(stepStart, findStepEnd(lines, stepStart, end));
+      if (step.some((line) => /^\s*shell:\s*bash\s*$/.test(line))) continue;
+      const value = match[2].trim();
+      const blockScalar = /^[|>][+-]?$/.test(value);
+      if (!blockScalar && !BASH_ISMS.test(value)) continue;
+      const nameLine = step.find((line) => /^\s*-\s*name:/.test(line)) ?? "";
+      const stepName =
+        nameLine.replace(/^\s*-\s*name:\s*/, "").replace(/^["']|["']$/g, "") ||
+        "unnamed step";
+      errors.push(
+        `${label}: step "${stepName}" in Windows job "${jobName}" needs shell: bash; the Windows default is PowerShell`,
+      );
+    }
+  }
+  return errors;
 }
 
 function jobBlock(lines, name) {
@@ -186,6 +544,18 @@ function main() {
     const errors = checkWorkflowWiring(readFileSync(path, "utf8"), path);
     for (const error of errors) console.error(error);
     failed += errors.length;
+  }
+  if (args.length === 0) {
+    for (const path of jsWorkflowPaths()) {
+      const text = readFileSync(path, "utf8");
+      for (const error of [
+        ...checkWorkflowTriggers(text, path),
+        ...checkWorkflowShells(text, path),
+      ]) {
+        console.error(error);
+        failed++;
+      }
+    }
   }
   if (failed > 0) process.exit(1);
   console.log(

@@ -10,6 +10,28 @@ A version that already exists is never overwritten: npm requires an exact tarbal
 it, and an existing JSR version is logged and skipped because Deno publishes only unpublished
 versions. See [Existing versions](#existing-versions).
 
+## Workflow triggers and shells
+
+Only `js-cd.yml` runs for a release tag. `js-std-ci.yml` and `js-os-ci.yml`
+declare `branches: ["**"]` on `push` in addition to their `paths` filters. A
+`paths`-only push filter matches both branch and tag pushes, and path filters
+are not evaluated at all for a tag, so the release tag started CI and the
+release. `branches` is matched only against `refs/heads/`, so `**` covers every
+branch and no tag. The checker evaluates the branch list in order, including
+`!` negation, requires at least one positive pattern, and requires the
+representative branches (`dev`, `plab-js-lib`, `rt-txiki`, and a slashed
+`fix/...` name) to survive; `["**", "!**"]` excludes everything and is refused.
+
+A job whose matrix includes `windows-latest` runs `run:` under PowerShell unless
+the step sets `shell: bash`. The tag guard is a POSIX script (`set -euo
+pipefail` and `case`), so it must declare `shell: bash`; without it Windows
+fails with a `ParserError` before the first command. `eng/scripts/check-workflow-wiring.mjs`
+checks the shell and the trigger semantics for every js workflow in the
+checkout; the shell check reads the whole step, so `shell: bash` is accepted
+whether it comes before or after `run:`. `eng/scripts/workflow-wiring.test.mjs`
+covers the failures, including a workflow mutated to drop the branch filter,
+cancel it with ordered negation, or lose the shell.
+
 ## Release ref guard
 
 A release is a tag push. Before tests and again before publishing, the workflow checks out
@@ -121,7 +143,8 @@ cannot silently publish another area.
 The plan job exposes `has_areas`, `matrix`, and `plan` as GitHub Actions job outputs from its
 `release_plan` step. `eng/scripts/check-workflow-wiring.mjs` and
 `eng/scripts/workflow-wiring.test.mjs` check every `js-cd.yml` copy in the checkout (both in the
-monorepo), so a missing step id or outputs mapping cannot silently skip every publish job.
+monorepo), so a missing step id or outputs mapping cannot silently skip every publish job. The same
+checker enforces the tag/branch trigger split and `shell: bash` on Windows jobs.
 
 A legacy area tag (`std/v*`, `js/v*`, `os/v*`) still resolves without `--area`. It selects exactly
 one area and uses the previous area tag for its notes, preserving the old behaviour.

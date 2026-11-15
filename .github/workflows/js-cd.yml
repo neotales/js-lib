@@ -48,6 +48,7 @@ jobs:
         run: node eng/scripts/check-release-ref.mjs
 
       - name: Check the tag
+        shell: bash
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
