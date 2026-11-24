@@ -15,6 +15,11 @@ test("chars::isLower", () => {
 
   ok(!isLower(0xa64e)); // Ꙏ
   ok(isLower(0xa64f)); // ꙏ
+
+  ok(!isLower(0x00aa)); // ª
+  ok(!isLower(0x00ba)); // º
+  ok(isLower(0x00b5)); // µ
+  ok(isLower(0x1e943)); // Adlam small
 });
 
 test("chars::isLowerAt", () => {

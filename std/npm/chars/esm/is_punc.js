@@ -14,13 +14,13 @@ import { P } from "./tables/p.js";
  * ```
  */
 export function isPunc(char) {
-    if (Number.isInteger(char) === false || char < 0 || char > 255) {
+    if (Number.isInteger(char) === false || char < 0 || char > 0x10ffff) {
         return false;
     }
     if (char < 256) {
         return (latin1[char] & pP) !== 0;
     }
-    const hi = P.R16[P.R32.length - 1][1];
+    const hi = P.R16[P.R16.length - 1][1];
     if (char <= hi) {
         return is16(P.R16, char);
     }
@@ -51,7 +51,7 @@ export function isPuncUnsafe(char) {
     if (char < 256) {
         return (latin1[char] & pP) !== 0;
     }
-    const hi = P.R16[P.R32.length - 1][1];
+    const hi = P.R16[P.R16.length - 1][1];
     if (char <= hi) {
         return is16(P.R16, char);
     }

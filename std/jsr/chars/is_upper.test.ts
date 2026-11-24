@@ -15,6 +15,11 @@ test("chars::isUpper", () => {
 
   ok(isUpper(0xa64e)); // Ꙏ
   ok(!isUpper(0xa64f)); // ꙏ
+
+  // pLo carries both case bits but is neither Lu nor Ll.
+  ok(!isUpper(0x00aa)); // ª
+  ok(!isUpper(0x00ba)); // º
+  ok(isUpper(0x1e921)); // Adlam capital
 });
 
 test("chars::isUpperAt", () => {

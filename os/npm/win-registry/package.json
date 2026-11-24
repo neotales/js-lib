@@ -1,0 +1,99 @@
+{
+  "name": "@neotales/win-registry",
+  "version": "0.1.0-alpha.0",
+  "keywords": [
+    "win-registry",
+    "windows",
+    "deno",
+    "node",
+    "bun",
+    "txiki",
+    "ffi"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neotales/js-lib.git",
+    "directory": "os/npm/win-registry"
+  },
+  "license": "MIT",
+  "module": "./esm/mod.js",
+  "types": "./types/mod.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      },
+      "default": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      }
+    },
+    "./registry": {
+      "import": {
+        "types": "./types/registry.d.ts",
+        "default": "./esm/registry.js"
+      },
+      "default": {
+        "types": "./types/registry.d.ts",
+        "default": "./esm/registry.js"
+      }
+    },
+    "./types": {
+      "import": {
+        "types": "./types/types.d.ts",
+        "default": "./esm/types.js"
+      },
+      "default": {
+        "types": "./types/types.d.ts",
+        "default": "./esm/types.js"
+      }
+    },
+    "./ffi-deno": {
+      "import": {
+        "types": "./types/ffi_deno.d.ts",
+        "default": "./esm/ffi_deno.js"
+      },
+      "default": {
+        "types": "./types/ffi_deno.d.ts",
+        "default": "./esm/ffi_deno.js"
+      }
+    },
+    "./ffi-bun": {
+      "import": {
+        "types": "./types/bun_ffi.d.ts",
+        "default": "./esm/bun_ffi.js"
+      },
+      "default": {
+        "types": "./types/bun_ffi.d.ts",
+        "default": "./esm/bun_ffi.js"
+      }
+    },
+    "./ffi-node": {
+      "import": {
+        "types": "./types/ffi_node.d.ts",
+        "default": "./esm/ffi_node.js"
+      },
+      "default": {
+        "types": "./types/ffi_node.d.ts",
+        "default": "./esm/ffi_node.js"
+      }
+    },
+    "./ffi-txiki": {
+      "import": {
+        "types": "./types/ffi_txiki.d.ts",
+        "default": "./esm/ffi_txiki.js"
+      },
+      "default": {
+        "types": "./types/ffi_txiki.d.ts",
+        "default": "./esm/ffi_txiki.js"
+      }
+    }
+  },
+  "scripts": {},
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "_generatedBy": "dnt@0.44.0"
+}

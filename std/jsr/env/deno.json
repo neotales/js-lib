@@ -1,0 +1,36 @@
+{
+  "name": "@neotales/env",
+  "version": "0.1.0-alpha.0",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./expand": "./expand.ts",
+    "./export": "./export.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neotales/js-lib.git",
+    "directory": "std/jsr/env"
+  },
+  "publish": {
+    "exclude": [
+      "**/*.test.ts",
+      "**/*_test.ts",
+      "**/*.test.js",
+      "**/*_test.js",
+      "**/*.test.mjs",
+      "**/*_test.mjs",
+      "**/*.test.cjs",
+      "**/*_test.cjs",
+      "**/*.test.d.ts",
+      "**/*_test.d.ts",
+      "**/*.spec.ts",
+      "**/*_spec.ts",
+      "**/test/run.ts",
+      "**/test/assert.ts",
+      "**/test/main.ts",
+      "ende.json",
+      "ende.jsonc"
+    ]
+  }
+}

@@ -36,6 +36,7 @@ function windows() {
 }
 let impl = evalUnixElevation;
 let isSupported = "process" in globalThis || "Deno" in globalThis || "Bun" in globalThis || "tjs" in globalThis;
+// #region is-elevated-runtime-backend
 if (isSupported && windows()) {
     let isNode = false;
     try {
@@ -70,6 +71,7 @@ if (isSupported && windows()) {
         impl = isNode ? unsupportedNodeFfi : unsupportedRuntimeFfi;
     }
 }
+// #endregion is-elevated-runtime-backend
 /**
  * Returns whether elevation detection is available in the current runtime.
  *

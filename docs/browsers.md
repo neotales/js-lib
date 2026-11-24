@@ -1,6 +1,6 @@
 # browsers
 
-Browsers should load `chars` and `slices`; see their [module README tables](../std/jsr/chars/README.md) and [slices](../std/jsr/slices/README.md).
+Browsers should load [chars](../std/jsr/chars/README.md), [slices](../std/jsr/slices/README.md), [strings](../std/jsr/strings/README.md), [args](../std/jsr/args/README.md), [env](../std/jsr/env/README.md), [dotenv](../std/jsr/dotenv/README.md), and [path](../std/jsr/path/README.md); see their module README tables. `path` needs a `URL` global, and Firefox drops non-local file hosts. No OS module has a browser FFI backend.
 
 Bundle as ESM and import with `<script type="module">`. No syntax rewrite is applied.
 
@@ -11,7 +11,7 @@ Bundle as ESM and import with `<script type="module">`. No syntax rewrite is app
 </script>
 ```
 
-`is-elevated` can be imported with `ffi_*.ts` left out of the bundle, but that is not support: `isElevatedAvailable()` is false and `isElevated()` throws.
+`is-elevated` can be imported with `ffi_*.ts` left out of the bundle, but that is not support: `isElevatedAvailable()` is false and `isElevated()` throws. The same is true of `win-registry`: `isRegistryAvailable()` is false and registry operations throw.
 
 ## Test lanes
 
@@ -20,8 +20,10 @@ Bundle as ESM and import with `<script type="module">`. No syntax rewrite is app
 ```sh
 pnpm install
 pnpm exec playwright install firefox webkit
-bun run test:firefox -- std/chars std/slices
-bun run test:webkit -- std/chars std/slices
+bun run test:firefox -- std/chars std/slices std/strings std/args
+bun run test:webkit -- std/chars std/slices std/strings std/args
+bun run test:chromium -- os/win-registry
+bun run test:firefox -- os/win-registry
 ```
 
 On Linux, install the system libraries too: `pnpm exec playwright install --with-deps firefox webkit`.

@@ -1,0 +1,54 @@
+{
+  "name": "@neotales/strings",
+  "version": "0.1.0-alpha.0",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./camelize": "./camelize.ts",
+    "./capitalize": "./capitalize.ts",
+    "./dasherize": "./dasherize.ts",
+    "./ends-with": "./ends_with.ts",
+    "./equal": "./equal.ts",
+    "./index-of": "./index_of.ts",
+    "./inflect": "./inflect.ts",
+    "./is-null": "./is_null.ts",
+    "./is-empty": "./is_empty.ts",
+    "./is-space": "./is_space.ts",
+    "./is-undefined": "./is_undefined.ts",
+    "./last-index-of": "./last_index_of.ts",
+    "./pascalize": "./pascalize.ts",
+    "./split": "./split.ts",
+    "./starts-with": "./starts_with.ts",
+    "./string-builder": "./string_builder.ts",
+    "./titleize": "./titleize.ts",
+    "./to-char-array": "./to_char_array.ts",
+    "./trim": "./trim.ts",
+    "./underscore": "./underscore.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neotales/js-lib.git",
+    "directory": "std/jsr/strings"
+  },
+  "publish": {
+    "exclude": [
+      "**/*.test.ts",
+      "**/*_test.ts",
+      "**/*.test.js",
+      "**/*_test.js",
+      "**/*.test.mjs",
+      "**/*_test.mjs",
+      "**/*.test.cjs",
+      "**/*_test.cjs",
+      "**/*.test.d.ts",
+      "**/*_test.d.ts",
+      "**/*.spec.ts",
+      "**/*_spec.ts",
+      "**/test/run.ts",
+      "**/test/assert.ts",
+      "**/test/main.ts",
+      "ende.json",
+      "ende.jsonc"
+    ]
+  }
+}

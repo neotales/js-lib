@@ -6,6 +6,7 @@
   "description": "Task entry for the js-lib satellite. Bun runs the tasks. The tests do not import node: or process.",
   "scripts": {
     "test": "bun eng/scripts/test-lane.ts bun",
+    "test:async": "bun eng/scripts/test-lane.ts async",
     "test:node": "bun eng/scripts/test-lane.ts node",
     "test:deno": "bun eng/scripts/test-lane.ts deno",
     "test:ende": "bun eng/scripts/test-lane.ts ende",
@@ -18,7 +19,9 @@
     "test:firefox": "bun eng/scripts/test-lane.ts firefox",
     "test:webkit": "bun eng/scripts/test-lane.ts webkit",
     "sync:ende": "bun eng/scripts/sync-ende.ts",
-    "transpile": "deno run -A --no-lock --node-modules-dir=auto eng/scripts/transpile.ts"
+    "transpile": "deno run -A --no-lock --node-modules-dir=auto eng/scripts/transpile.ts",
+    "test:harness": "bun eng/scripts/test-runner.test.ts",
+    "test:types": "deno check --no-lock std/jsr/test/typecheck.ts"
   },
   "devDependencies": {
     "playwright": "1.65.0"

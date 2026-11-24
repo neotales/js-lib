@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   defaultAreaRegistry,
   classifyChangedPaths,
@@ -47,6 +48,33 @@ const REGISTRY = {
   ],
   sharedPaths: ["eng", "docs", ".github", "package.json"],
 };
+
+test("std JSR dry runs resolve nested workspace imports without migrating pnpm config", () => {
+  const root = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
+  const config = JSON.parse(readFileSync(join(root, "std/deno.json"), "utf8"));
+  assert.deepEqual(config.workspace, ["./jsr/*"]);
+  assert.equal(config.nodeModulesDir, "auto");
+
+  for (const pkg of ["env", "dotenv"]) {
+    const result = spawnSync("deno", ["publish", "--dry-run", "--allow-dirty"], {
+      cwd: join(root, "std/jsr", pkg),
+      encoding: "utf8",
+      timeout: 120_000,
+    });
+    assert.ifError(result.error);
+    assert.equal(
+      result.status,
+      0,
+      `${pkg} dry run failed:\n${result.stdout}\n${result.stderr}`,
+    );
+    assert.doesNotMatch(
+      `${result.stdout}\n${result.stderr}`,
+      /Migrated its workspace configuration|not a member of the workspace/,
+    );
+  }
+
+  assert.equal(existsSync(join(root, "std/deno.jsonc")), false);
+});
 
 function git(repo, args) {
   const result = spawnSync("git", ["-C", repo, ...args], { encoding: "utf8" });

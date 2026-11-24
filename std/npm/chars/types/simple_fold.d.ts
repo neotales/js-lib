@@ -4,9 +4,11 @@ import type { Char } from "./types.js";
  * uppercase, lowercase is returned.  If the character is lowercase, uppercase is returned.
  *
  * If the character like digits 0-1 cannot be folded, the original character is returned.
+ * A value that is not an integer Unicode code point is also returned unchanged.
  *
  * @param char The character to fold.
- * @returns The folded character.
+ * @returns The folded character, or the input when it cannot be folded or is
+ * not an integer code point from `0` to `0x10FFFF`.
  *
  * @example
  * ```ts
@@ -14,8 +16,8 @@ import type { Char } from "./types.js";
  *
  * console.log(String.fromCharCode(simpleFold(0x41))); // 'a'
  * console.log(String.fromCharCode(simpleFold(0x61))); // 'A'
- * console.log(String.fromCharCode(simpleFold(0xDF))); // 's'
- * console.log(String.fromCharCode(simpleFold(0x73))); // 'ß'
+ * console.log(String.fromCharCode(simpleFold(0xDF))); // 'ẞ'
+ * console.log(String.fromCharCode(simpleFold(0x73))); // 'ſ'
  * console.log(String.fromCharCode(simpleFold(0x1F88))); // 'ᾀ'
  * console.log(String.fromCharCode(simpleFold(0x1F80))); // 'ᾈ'
  * ```

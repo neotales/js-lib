@@ -1,5 +1,5 @@
 import type { Char } from "./types.ts";
-import { is16, is32, latin1, pLu } from "./tables/latin1.ts";
+import { is16, is32, latin1, pLmask, pLu } from "./tables/latin1.ts";
 import { Lu } from "./tables/lu.ts";
 
 /**
@@ -24,7 +24,7 @@ export function isUpper(char: Char): boolean {
   }
 
   if (char < 256) {
-    return (latin1[char] & pLu) !== 0;
+    return (latin1[char] & pLmask) === pLu;
   }
 
   const hi = Lu.R16[Lu.R16.length - 1][1];
@@ -59,7 +59,7 @@ export function isUpper(char: Char): boolean {
  */
 export function isUpperUnsafe(char: Char): boolean {
   if (char < 256) {
-    return (latin1[char] & pLu) !== 0;
+    return (latin1[char] & pLmask) === pLu;
   }
 
   const hi = Lu.R16[Lu.R16.length - 1][1];

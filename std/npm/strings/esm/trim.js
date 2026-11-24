@@ -1,0 +1,124 @@
+/**
+ * The trim module provides functions to trim characters from strings and
+ * includes functions to trim leading, trailing, and both leading and
+ * trailing characters.  JavaScript trim functions can only trim whitespace
+ * and these functions are designed to trim any character.
+ *
+ * @module
+ */
+import { trimChar as ogChar, trimEndChar as ogEndChar, trimEndSlice as ogEndSlice, trimSlice as ogSlice, trimStartChar as ogStartChar, trimStartSlice as ogStartSlice, } from "@neotales/slices/trim";
+import { toCharSliceLike } from "@neotales/slices/utils";
+/**
+ * Trims the trailing character from the string.
+ * @param value The string to trim.
+ * @param suffix The character suffix to trim.
+ * @returns The trimmed string.
+ */
+export function trimEndChar(value, suffix) {
+    const r = ogEndChar(value, suffix);
+    return String.fromCodePoint(...r);
+}
+/**
+ * Trims the trailing characters from the string.
+ * @param value The string to trim.
+ * @param suffix The characters suffix to trim.
+ * @returns The trimmed string.
+ */
+export function trimEndSlice(value, suffix) {
+    const r = ogEndSlice(value, suffix);
+    return String.fromCodePoint(...r);
+}
+/**
+ * Trims the trailing characters from the string.
+ * @param value The string to trim.
+ * @param suffix The characters suffix to trim. If not provided, all trailing
+ * whitespace characters are removed.
+ * @returns The trimmed string.
+ */
+export function trimEnd(value, suffix) {
+    if (suffix === undefined) {
+        return value.trimEnd();
+    }
+    if (suffix.length === 1) {
+        const t = toCharSliceLike(suffix);
+        const rune = t.at(0) ?? -1;
+        return trimEndChar(value, rune);
+    }
+    return trimEndSlice(value, suffix);
+}
+/**
+ * Trims the leading character from the string.
+ * @param value The string to trim.
+ * @param prefix The character prefix to trim.
+ * @returns The trimmed string.
+ */
+export function trimStartChar(value, prefix) {
+    const r = ogStartChar(value, prefix);
+    return String.fromCodePoint(...r);
+}
+/**
+ * Trims the leading characters from the string.
+ * @param value The string to trim.
+ * @param prefix The characters prefix to trim.
+ * @returns The trimmed string.
+ */
+export function trimStartSlice(value, prefix) {
+    const r = ogStartSlice(value, prefix);
+    return String.fromCodePoint(...r);
+}
+/**
+ * Trims the leading character from the string.
+ * @param value The string to trim.
+ * @param prefix The character prefix to trim. If not provided, all leading
+ * whitespace characters are removed.
+ * @returns The trimmed string.
+ */
+export function trimStart(value, prefix) {
+    if (prefix === undefined) {
+        return value.trimStart();
+    }
+    if (prefix.length === 1) {
+        const t = toCharSliceLike(prefix);
+        const rune = t.at(0) ?? -1;
+        return trimStartChar(value, rune);
+    }
+    return trimStartSlice(value, prefix);
+}
+/**
+ * Trims the leading and trailing character from the string.
+ * @param value The string to trim.
+ * @param char The character to trim.
+ * @returns The trimmed string.
+ */
+export function trimChar(value, char) {
+    const r = ogChar(value, char);
+    return String.fromCodePoint(...r);
+}
+/**
+ * Trims the leading and trailing characters from the string.
+ * @param value The string to trim.
+ * @param chars The characters to trim.
+ * @returns The trimmed string.
+ */
+export function trimSlice(value, chars) {
+    const r = ogSlice(value, chars);
+    return String.fromCodePoint(...r);
+}
+/**
+ * Trims the leading and trailing characters from the string.
+ * @param value The string to trim.
+ * @param chars The characters to trim. If not provided, all leading
+ * whitespace characters are removed.
+ * @returns The trimmed string.
+ */
+export function trim(value, chars) {
+    if (chars === undefined) {
+        return value.trim();
+    }
+    if (chars.length === 1) {
+        const t = toCharSliceLike(chars);
+        const rune = t.at(0) ?? -1;
+        return trimChar(value, rune);
+    }
+    return trimSlice(value, chars);
+}

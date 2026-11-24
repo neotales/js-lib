@@ -1,0 +1,119 @@
+{
+  "name": "@neotales/dotenv",
+  "version": "0.1.0-alpha.0",
+  "keywords": [
+    "dotenv",
+    "env-file",
+    "deno",
+    "node",
+    "bun",
+    "ende",
+    "quickjs-ng",
+    "workerd",
+    "txiki",
+    "clearscript",
+    "browsers",
+    "jerryscript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neotales/js-lib.git",
+    "directory": "std/npm/dotenv"
+  },
+  "license": "MIT",
+  "module": "./esm/mod.js",
+  "types": "./types/mod.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      },
+      "default": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      }
+    },
+    "./document": {
+      "import": {
+        "types": "./types/document.d.ts",
+        "default": "./esm/document.js"
+      },
+      "default": {
+        "types": "./types/document.d.ts",
+        "default": "./esm/document.js"
+      }
+    },
+    "./expand": {
+      "import": {
+        "types": "./types/expand.d.ts",
+        "default": "./esm/expand.js"
+      },
+      "default": {
+        "types": "./types/expand.d.ts",
+        "default": "./esm/expand.js"
+      }
+    },
+    "./load": {
+      "import": {
+        "types": "./types/load.d.ts",
+        "default": "./esm/load.js"
+      },
+      "default": {
+        "types": "./types/load.d.ts",
+        "default": "./esm/load.js"
+      }
+    },
+    "./parse-document": {
+      "import": {
+        "types": "./types/parse_document.d.ts",
+        "default": "./esm/parse_document.js"
+      },
+      "default": {
+        "types": "./types/parse_document.d.ts",
+        "default": "./esm/parse_document.js"
+      }
+    },
+    "./parse": {
+      "import": {
+        "types": "./types/parse.d.ts",
+        "default": "./esm/parse.js"
+      },
+      "default": {
+        "types": "./types/parse.d.ts",
+        "default": "./esm/parse.js"
+      }
+    },
+    "./stringify": {
+      "import": {
+        "types": "./types/stringify.d.ts",
+        "default": "./esm/stringify.js"
+      },
+      "default": {
+        "types": "./types/stringify.d.ts",
+        "default": "./esm/stringify.js"
+      }
+    },
+    "./stringify-document": {
+      "import": {
+        "types": "./types/stringify_document.d.ts",
+        "default": "./esm/stringify_document.js"
+      },
+      "default": {
+        "types": "./types/stringify_document.d.ts",
+        "default": "./esm/stringify_document.js"
+      }
+    }
+  },
+  "scripts": {},
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@neotales/chars": "workspace:*",
+    "@neotales/env": "workspace:*",
+    "@neotales/strings": "workspace:*"
+  },
+  "_generatedBy": "dnt@0.44.0"
+}

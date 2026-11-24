@@ -16,7 +16,8 @@ const root = process.env.PLAB_TEST_ROOT ?? join(import.meta.dir, "../..");
 const lane = Bun.argv[2] ?? "";
 const buildRoot = join(root, ".build", lane || "unknown");
 const selection = Bun.argv.slice(3).filter((arg) => arg !== "--");
-const lanes = ["bun", "node", "deno", "ende", "workerd", "quickjs", "txiki", "clearscript", "jerry", "chromium", "firefox", "webkit"];
+const runAsyncTests = lane === "async" || process.env.PLAB_ASYNC_TESTS === "1";
+const lanes = ["bun", "async", "node", "deno", "ende", "workerd", "quickjs", "txiki", "clearscript", "jerry", "chromium", "firefox", "webkit"];
 
 if (!lanes.includes(lane)) {
   console.error(`usage: bun eng/scripts/test-lane.ts <${lanes.join("|")}>`);
@@ -28,17 +29,39 @@ if (suites.length === 0) throw new Error("no test suites discovered");
 let failures = 0;
 for (const suite of suites) {
   try {
-    if (lane === "bun") await runBun(suite.entry);
-    else if (lane === "deno") await spawn("deno", ["run", "--allow-sys", "--allow-ffi", suite.entry]);
-    else if (lane === "ende") await spawn("ende", ["run", "--allow-sys", "--allow-ffi", suite.entry]);
+    if (lane === "bun" || lane === "async") await runBun(suite.entry);
+    else if (lane === "deno") await spawn("deno", jsRuntimeArgs(suite.entry));
+    else if (lane === "ende") await spawn("ende", jsRuntimeArgs(suite.entry));
     else if (lane === "node") await spawn("node", [await bundle(suite.entry)]);
-    else if (lane === "quickjs") await spawn(qjs(), [await bundle(suite.entry)]);
+    else if (lane === "quickjs") {
+      const argsProbe = process.env.QUICKJS_PROCESS_ARGS_PROBE === "1" &&
+        suite.label === "std/process";
+      if (process.env.QUICKJS_PROCESS_ARGS_PROBE === "1" && !argsProbe) {
+        throw new Error("the QuickJS process-args probe only runs std/process");
+      }
+      await spawn(qjs(), [
+        "--module",
+        await quickjsBundle(suite.entry),
+        ...(argsProbe ? ["neotales-qjs-arg-one", "neotales-qjs-arg-two"] : []),
+      ]);
+    }
     else if (lane === "workerd") await runWorkerd(await bundle(suite.entry));
-    else if (lane === "txiki") await spawn("tjs", ["run", await bundle(suite.entry)]);
+    else if (lane === "txiki") {
+      await spawn(txiki(), [
+        "run",
+        await bundle(suite.entry),
+        ...(suite.label === "std/process" ? ["neotales-tjs-arg-one", "neotales-tjs-arg-two"] : []),
+      ]);
+    }
     else if (lane === "jerry") await spawn(jerry(), [await jerryBundle(suite.entry)]);
     else if (lane === "chromium") await runChromium(await bundleModule(suite.entry));
     else if (lane === "firefox" || lane === "webkit") await runPlaywright(lane, await bundleModule(suite.entry));
     else await runClearScript(suite.entry);
+    if (suite.label === "std/process" && ["quickjs", "txiki", "bun", "async", "node", "deno", "ende"].includes(lane)) {
+      await runProcessPipeProbe();
+      await runProcessPipeProbe(true);
+    }
+    if (suite.label === "std/process" && lane === "jerry") await runJerryPrintProbe();
   } catch (error) {
     failures++;
     console.error(`suite ${suite.label} failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -63,7 +86,10 @@ function discoverSuites(selection: string[]) {
     if (!tests.length) throw new Error(`no tests found for ${label}`);
     const entry = join(buildRoot, "test", label, "main.ts");
     mkdirSync(dirname(entry), { recursive: true });
-    writeFileSync(entry, `${tests.map((file) => `import ${JSON.stringify(relativeSpecifier(entry, file, "ts"))};`).join("\n")}\nimport { run } from "@neotales/test";\nconst result = run();\nif (result.failed > 0) throw new Error(String(result.failed) + " failed");\n`);
+    const runner = runAsyncTests
+      ? `import { runAsync } from "@neotales/test";\nconst result = await runAsync();\nif (result.failed > 0) throw new Error(String(result.failed) + " failed");`
+      : `import { run } from "@neotales/test";\nconst result = run();\nif (result.failed > 0) throw new Error(String(result.failed) + " failed");`;
+    writeFileSync(entry, `${tests.map((file) => `import ${JSON.stringify(relativeSpecifier(entry, file, "ts"))};`).join("\n")}\n${runner}\n`);
     out.push({ label, entry });
   }
   return out;
@@ -80,6 +106,16 @@ function collectTestFiles(dir: string): string[] {
   return found;
 }
 
+// Deno and Ende need --allow-env when either the Windows write opt-in or
+// the required-backend flag is set. Without them, no registry write is enabled.
+function jsRuntimeArgs(entry: string): string[] {
+  // The env scenarios read and write environment variables, and command
+  // substitution runs a child process. sys and ffi cover the OS modules.
+  const args = ["run", "--allow-sys", "--allow-ffi", "--allow-env", "--allow-run"];
+  args.push(entry);
+  return args;
+}
+
 async function spawn(bin: string, args: string[]): Promise<void> {
   const resolved = existsSync(bin) ? bin : Bun.which(bin);
   if (resolved === null) {
@@ -88,6 +124,18 @@ async function spawn(bin: string, args: string[]): Promise<void> {
       : `${bin} is not on PATH`;
     console.log(`not run ${lane}: ${why}`);
     throw new Error(`not run ${lane}`);
+  }
+  if (lane === "quickjs" && process.env.QUICKJS_PROCESS_ARGS_PROBE === "1") {
+    const version = Bun.spawnSync([resolved, "--version"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (
+      version.exitCode !== 0 ||
+      version.stdout.toString().trim() !== "0.18.0"
+    ) {
+      throw new Error("QuickJS process-args probe requires pinned QuickJS-ng 0.18.0");
+    }
   }
   // A workflow env is not a reliable way to reach this child, so the Node CI
   // legs put the FFI switch on argv. Unix answers with uid and needs neither.
@@ -108,7 +156,136 @@ function ffiFlags(): string[] {
 }
 
 function qjs(): string {
-  return Bun.which("qjs") ?? Bun.which("qjs-linux-x86_64") ?? "qjs";
+  return Bun.which("qjs-linux-x86_64") ?? Bun.which("qjs") ?? "qjs";
+}
+
+function txiki(): string {
+  const home = process.env.HOME ?? "";
+  const pinned = join(home, ".cache/neotales/txiki-src/build/tjs");
+  if (existsSync(pinned)) return pinned;
+  return Bun.which("tjs") ?? "tjs";
+}
+
+async function runProcessPipeProbe(asyncRead = false): Promise<void> {
+  const probe = join(buildRoot, `process-pipe-probe${asyncRead ? "-async" : ""}.ts`);
+  const quickjs = lane === "quickjs";
+  const txikiLane = lane === "txiki";
+  writeFileSync(probe, `
+import { args, chdir, cwd, execPath, pid, ppid, popd, pushd, stdin, stdout, stderr, exit } from "@neotales/process";
+if (!(pid > 0) || !(ppid >= 0) || !execPath()) throw new Error("process metadata missing");
+if (!Array.isArray(args) || args.some((arg) => typeof arg !== "string")) throw new Error("argument metadata invalid");
+const originalDirectory = cwd();
+chdir(originalDirectory);
+pushd(originalDirectory);
+if (popd() !== originalDirectory) throw new Error("directory stack failed");
+const input = new Uint8Array(5);
+let count = 0;
+while (count < input.length) {
+  const read = ${txikiLane || asyncRead ? "await stdin.read(input.subarray(count))" : "stdin.readSync(input.subarray(count))"};
+  if (read === null) break;
+  count += read;
+}
+if (count !== 5) throw new Error("stdin pipe did not produce five bytes");
+if (${txikiLane || asyncRead ? "await stdin.read(new Uint8Array(1))" : "stdin.readSync(new Uint8Array(1))"} !== null) throw new Error("stdin EOF did not map to null");
+if (${txikiLane ? "await stdout.write(input.subarray(0, count))" : "stdout.writeSync(input.subarray(0, count))"} !== 5) throw new Error("stdout byte count mismatch");
+if (await stdout.write(input.subarray(0, count)) !== 5) throw new Error("async stdout byte count mismatch");
+if (await stderr.write(new Uint8Array([69,82,82,10])) !== 4) throw new Error("stderr byte count mismatch");
+stdin.close();
+stdout.close();
+stderr.close();
+exit(23);
+`);
+  const file = quickjs ? await quickjsBundle(probe) : txikiLane ? await bundle(probe) : await nodeTargetBundle(probe);
+  const command = quickjs
+    ? [qjs(), "--module", file]
+    : txikiLane
+    ? [txiki(), "run", file]
+    : lane === "deno"
+    ? ["deno", "run", "--allow-sys", "--allow-read", "--allow-write", file]
+    : lane === "ende"
+    ? ["ende", "run", "--allow-sys", "--allow-read", "--allow-write", file]
+    : lane === "node"
+    ? ["node", file]
+    : ["bun", file];
+  const child = Bun.spawn(command, { cwd: root, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+  child.stdin.write("probe");
+  child.stdin.end();
+  const [code, output, errors] = await Promise.all([
+    exited(child, 10_000),
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  if (code !== 23 || output !== "probeprobe" || errors !== "ERR\n") {
+    throw new Error(`${lane} process pipe probe mismatch: exit=${code}, stdout=${JSON.stringify(output)}, stderr=${JSON.stringify(errors)}`);
+  }
+}
+
+async function nodeTargetBundle(entry: string): Promise<string> {
+  const out = join(buildRoot, "bundles", `${relative(join(buildRoot, "test"), entry).replaceAll("/", "_")}.probe.mjs`);
+  mkdirSync(dirname(out), { recursive: true });
+  const workspace = loadWorkspace(root);
+  const result = await Bun.build({
+    entrypoints: [entry],
+    format: "esm",
+    target: "node",
+    plugins: [{
+      name: "process-probe-workspace",
+      setup(build) {
+        build.onResolve({ filter: /^@neotales\// }, (args) => {
+          const target = resolveSpecifier(workspace, args.path);
+          if (target == null) throw new Error(`${args.path} is not a workspace export`);
+          return { path: target };
+        });
+      },
+    }],
+  });
+  if (!result.success) throw new Error(result.logs.map((item) => item.message).join("\n") || "process probe bundle failed");
+  writeFileSync(out, await result.outputs[0]!.text());
+  return out;
+}
+
+async function runJerryPrintProbe(): Promise<void> {
+  const probe = join(buildRoot, "process-print-probe.ts");
+  writeFileSync(probe, `
+import { stdout } from "@neotales/process";
+if (stdout.writeSync(new Uint8Array([226, 152, 131, 10])) !== 4) throw new Error("print fallback byte count mismatch");
+`);
+  const file = await jerryBundle(probe);
+  const child = Bun.spawn([jerry(), file], { cwd: root, stdout: "pipe", stderr: "pipe" });
+  const [code, output, errors] = await Promise.all([
+    exited(child, 10_000),
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  if (code !== 0 || output !== "☃\n" || errors.length > 0) {
+    throw new Error(`JerryScript print fallback mismatch: exit=${code}, output=${JSON.stringify(output)}`);
+  }
+}
+
+async function quickjsBundle(entry: string): Promise<string> {
+  const out = join(buildRoot, "bundles", `${relative(join(buildRoot, "test"), entry).replaceAll("/", "_")}.qjs.mjs`);
+  mkdirSync(dirname(out), { recursive: true });
+  const workspace = loadWorkspace(root);
+  const result = await Bun.build({
+    entrypoints: [entry],
+    format: "esm",
+    target: "browser",
+    external: ["qjs:std", "qjs:os"],
+    plugins: [{
+      name: "quickjs-workspace",
+      setup(build) {
+        build.onResolve({ filter: /^@neotales\// }, (args) => {
+          const target = resolveSpecifier(workspace, args.path);
+          if (target == null) throw new Error(`${args.path} is not a workspace export`);
+          return { path: target };
+        });
+      },
+    }],
+  });
+  if (!result.success) throw new Error(result.logs.map((item) => item.message).join("\n") || "QuickJS bundle failed");
+  const code = await result.outputs[0]!.text();
+  writeFileSync(out, `import * as qjsStd from "qjs:std";\nimport * as qjsOs from "qjs:os";\nglobalThis.std = qjsStd;\nglobalThis.os = qjsOs;\n${code}`);
+  return out;
 }
 
 function jerry(): string {
@@ -128,6 +305,31 @@ function chromiumBin(): string | null {
   return null;
 }
 
+// JerryScript cannot parse top-level await. Each module keeps its production
+// facade and backend selection, but the runtime-backend region is removed at
+// build time. The default throwing backend remains and reports unavailable.
+// This is a specialization of the real module, not a substitute entrypoint.
+function noTlaFacadeRegions(): ReadonlyArray<readonly [RegExp, string]> {
+  return [
+    [/\/os\/jsr\/win-registry\/registry\.ts$/, "win-registry-runtime-backend"],
+    [/\/os\/jsr\/is-elevated\/mod\.ts$/, "is-elevated-runtime-backend"],
+    [/\/os\/jsr\/win-cred\/ffi\.ts$/, "win-cred-runtime-backend"],
+    [/\/os\/jsr\/darwin-keychain\/ffi\.ts$/, "darwin-keychain-runtime-backend"],
+    [/\/os\/jsr\/linux-libsecret\/ffi\.ts$/, "linux-libsecret-runtime-backend"],
+  ];
+}
+
+function specializeForNoTla(source: string, name: string): string {
+  const start = `// #region ${name}`;
+  const end = `// #endregion ${name}`;
+  const from = source.indexOf(start);
+  const to = source.indexOf(end);
+  if (from < 0 || to < from) {
+    throw new Error(`${name} runtime region markers are missing`);
+  }
+  return `${source.slice(0, from)}// JerryScript specialization: no top-level await and no native backend import.\n${source.slice(to + end.length)}`;
+}
+
 async function bundleIife(entry: string): Promise<string> {
   const out = join(buildRoot, "bundles", `${relative(join(buildRoot, "test"), entry).replaceAll("/", "_")}.iife.js`);
   mkdirSync(dirname(out), { recursive: true });
@@ -144,6 +346,17 @@ async function bundleIife(entry: string): Promise<string> {
           if (target == null) throw new Error(`${args.path} is not a workspace export`);
           return { path: target };
         });
+        if (lane === "jerry") {
+          for (const [filter, region] of noTlaFacadeRegions()) {
+            build.onLoad(
+              { filter },
+              (args) => ({
+                contents: specializeForNoTla(readFileSync(args.path, "utf8"), region),
+                loader: "ts",
+              }),
+            );
+          }
+        }
       },
     }],
   });
@@ -165,8 +378,13 @@ async function jerryBundle(entry: string): Promise<string> {
   const built = Bun.spawnSync(command, { cwd: root, stdout: "pipe", stderr: "pipe" });
   if (built.exitCode !== 0) throw new Error(built.stderr.toString() || "esbuild failed");
   const out = file.replace(/\.iife\.js$/, ".jerry.js");
-  // The jerry binary has print, not console.
-  writeFileSync(out, `var console = { log: print, error: print, warn: print, info: print };\n${readFileSync(down, "utf8")}`);
+  // The jerry binary has print, not console. The lane marker is explicit
+  // because no runtime feature reliably distinguishes JerryScript from a
+  // browser or QuickJS-ng.
+  writeFileSync(
+    out,
+    `globalThis.__NEOTALES_LANE__ = "jerry";\nvar console = { log: print, error: print, warn: print, info: print };\n${readFileSync(down, "utf8")}`,
+  );
   return out;
 }
 
@@ -384,6 +602,25 @@ async function runWorkerd(file: string): Promise<void> {
     const response = await waitFor("http://127.0.0.1:8791/", 15_000);
     const body = await response.text();
     if (!response.ok) throw new Error(`workerd status ${response.status}: ${body}`);
+    const probe = JSON.parse(body);
+    if (
+      probe.process !== "object" ||
+      probe.pid !== 1 ||
+      probe.cwd !== "/bundle" ||
+      probe.argvCount !== 1 ||
+      probe.chdir !== "function" ||
+      probe.chdirSame !== "unchanged" ||
+      !probe.invalidChdirThrows ||
+      probe.stdin !== "function" ||
+      !probe.stdinEmpty ||
+      probe.stdout !== "function" ||
+      probe.stderr !== "function" ||
+      (probe.stdoutIsTTY !== false && probe.stdoutIsTTY !== undefined) ||
+      (probe.stderrIsTTY !== false && probe.stderrIsTTY !== undefined)
+    ) {
+      throw new Error(`workerd process probe did not match documented worker capabilities: ${body}`);
+    }
+    console.log(`workerd process capability probe: ${body}`);
   } finally {
     child.kill();
     await exited(child, 5_000);
@@ -392,14 +629,42 @@ async function runWorkerd(file: string): Promise<void> {
 
 function workerSource(): string {
   return `let failure = "";
+let processProbe = {};
 try {
+  globalThis.__NEOTALES_LANE__ = "workerd";
   await import("./tests.js");
+  let chdirSame = "unavailable";
+  let invalidChdirThrows = false;
+  if (typeof process === "object" && typeof process.chdir === "function") {
+    const before = process.cwd();
+    process.chdir(".");
+    chdirSame = process.cwd() === before ? "unchanged" : process.cwd();
+    try { process.chdir("/path/which/does/not/exist"); } catch { invalidChdirThrows = true; }
+  }
+  processProbe = {
+    process: typeof process,
+    pid: typeof process === "object" ? process.pid : null,
+    nodeVersion: typeof process === "object" ? process.versions?.node ?? null : null,
+    releaseName: typeof process === "object" ? process.release?.name ?? null : null,
+    cwd: typeof process === "object" && typeof process.cwd === "function" ? process.cwd() : null,
+    chdir: typeof process === "object" ? typeof process.chdir : "absent",
+    chdirSame,
+    invalidChdirThrows,
+    exit: typeof process === "object" ? typeof process.exit : "absent",
+    argvCount: typeof process === "object" && Array.isArray(process.argv) ? process.argv.length : null,
+    stdin: typeof process === "object" ? typeof process.stdin?.read : "absent",
+    stdinEmpty: typeof process === "object" && typeof process.stdin?.read === "function" ? process.stdin.read() === null : false,
+    stdout: typeof process === "object" ? typeof process.stdout?.write : "absent",
+    stdoutIsTTY: typeof process === "object" ? process.stdout?.isTTY : null,
+    stderr: typeof process === "object" ? typeof process.stderr?.write : "absent",
+    stderrIsTTY: typeof process === "object" ? process.stderr?.isTTY : null,
+  };
 } catch (err) {
   failure = err && err.stack ? err.stack : String(err);
 }
 export default {
   fetch() {
-    return new Response(failure || "ok", { status: failure ? 500 : 200 });
+    return new Response(failure || JSON.stringify(processProbe), { status: failure ? 500 : 200 });
   },
 };
 `;

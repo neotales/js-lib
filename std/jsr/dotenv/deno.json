@@ -1,0 +1,41 @@
+{
+  "name": "@neotales/dotenv",
+  "version": "0.1.0-alpha.0",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./document": "./document.ts",
+    "./expand": "./expand.ts",
+    "./load": "./load.ts",
+    "./parse-document": "./parse_document.ts",
+    "./parse": "./parse.ts",
+    "./stringify": "./stringify.ts",
+    "./stringify-document": "./stringify_document.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neotales/js-lib.git",
+    "directory": "std/jsr/dotenv"
+  },
+  "publish": {
+    "exclude": [
+      "**/*.test.ts",
+      "**/*_test.ts",
+      "**/*.test.js",
+      "**/*_test.js",
+      "**/*.test.mjs",
+      "**/*_test.mjs",
+      "**/*.test.cjs",
+      "**/*_test.cjs",
+      "**/*.test.d.ts",
+      "**/*_test.d.ts",
+      "**/*.spec.ts",
+      "**/*_spec.ts",
+      "**/test/run.ts",
+      "**/test/assert.ts",
+      "**/test/main.ts",
+      "ende.json",
+      "ende.jsonc"
+    ]
+  }
+}

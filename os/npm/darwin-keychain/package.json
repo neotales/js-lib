@@ -1,0 +1,90 @@
+{
+  "name": "@neotales/darwin-keychain",
+  "version": "0.1.0-alpha.0",
+  "keywords": [
+    "darwin-keychain",
+    "macos",
+    "keychain",
+    "deno",
+    "node",
+    "bun",
+    "txiki",
+    "ffi"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neotales/js-lib.git",
+    "directory": "os/npm/darwin-keychain"
+  },
+  "license": "MIT",
+  "module": "./esm/mod.js",
+  "types": "./types/mod.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      },
+      "default": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      }
+    },
+    "./ffi": {
+      "import": {
+        "types": "./types/ffi.d.ts",
+        "default": "./esm/ffi.js"
+      },
+      "default": {
+        "types": "./types/ffi.d.ts",
+        "default": "./esm/ffi.js"
+      }
+    },
+    "./ffi-deno": {
+      "import": {
+        "types": "./types/ffi_deno.d.ts",
+        "default": "./esm/ffi_deno.js"
+      },
+      "default": {
+        "types": "./types/ffi_deno.d.ts",
+        "default": "./esm/ffi_deno.js"
+      }
+    },
+    "./ffi-bun": {
+      "import": {
+        "types": "./types/ffi_bun.d.ts",
+        "default": "./esm/ffi_bun.js"
+      },
+      "default": {
+        "types": "./types/ffi_bun.d.ts",
+        "default": "./esm/ffi_bun.js"
+      }
+    },
+    "./ffi-node": {
+      "import": {
+        "types": "./types/ffi_node.d.ts",
+        "default": "./esm/ffi_node.js"
+      },
+      "default": {
+        "types": "./types/ffi_node.d.ts",
+        "default": "./esm/ffi_node.js"
+      }
+    },
+    "./ffi-txiki": {
+      "import": {
+        "types": "./types/ffi_txiki.d.ts",
+        "default": "./esm/ffi_txiki.js"
+      },
+      "default": {
+        "types": "./types/ffi_txiki.d.ts",
+        "default": "./esm/ffi_txiki.js"
+      }
+    }
+  },
+  "scripts": {},
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "_generatedBy": "dnt@0.44.0"
+}

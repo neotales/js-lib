@@ -53,6 +53,10 @@ test("chars::isPunc", () => {
   ok(!isPunc(-0.9));
   ok(!isPunc(1.1));
   ok(!isPunc(-1.1));
+
+  // Punctuation above Latin-1.
+  ok(isPunc(0x037e)); // Greek question mark
+  ok(isPunc(0x1e95f)); // U+1E95F, category Po
 });
 
 test("chars::isPuncAt", () => {
@@ -66,4 +70,6 @@ test("chars::isPuncAt", () => {
   ok(!isPuncAt(str, 6));
   ok(isPuncAt(str, 7));
   ok(isPuncAt(str, 8));
+
+  ok(isPuncAt(String.fromCodePoint(0x1e95f), 0));
 });

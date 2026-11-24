@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import test from "node:test";
 
 const root = new URL("../../", import.meta.url).pathname;
@@ -124,6 +124,32 @@ test("empty workspace fails instead of silently succeeding", () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("JerryScript win-registry specializes the real module and imports no native FFI", { skip: !existsSync(process.env.JERRY ?? join(homedir(), ".cache/neotales/jerryscript-v3.0.0/build/bin/jerry")) }, () => {
+  const result = run("jerry", "os/win-registry");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /default registry backend throws for every operation when unsupported/);
+  const bundle = readFileSync(join(root, ".build/jerry/bundles/os_win-registry_main.ts.jerry.js"), "utf8");
+  assert.match(bundle, /RegistryKey/);
+  assert.match(bundle, /Windows Registry operations are not supported/);
+  assert.doesNotMatch(bundle, /mod_no_ffi/);
+  assert.doesNotMatch(bundle, /(?:from|import\s*\()\s*["'](?:tjs|bun|node):ffi["']/);
+  assert.doesNotMatch(bundle, /ffi_(?:deno|node|txiki)\.ts|bun_ffi\.ts/);
+  assert.doesNotMatch(bundle, /await\s+import\s*\(/);
+});
+
+test("REQUIRE_WIN_REGISTRY_FFI reaches Deno and fails closed off Windows", { skip: process.platform === "win32" || spawnSync("deno", ["--version"]).status !== 0 }, () => {
+  const result = spawnSync(bun, [launcher, "deno", "os/win-registry"], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, REQUIRE_WIN_REGISTRY_FFI: "1", WIN_REGISTRY_WRITE_TESTS: "" },
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stdout + result.stderr,
+    /REQUIRE_WIN_REGISTRY_FFI=1 but this host is not Windows|REQUIRE_WIN_REGISTRY_FFI=1 but no Windows registry backend/,
+  );
 });
 
 test("node lane bundles a workspace graph for Node so createRequire survives", () => {

@@ -1,0 +1,69 @@
+{
+  "name": "@neotales/env",
+  "version": "0.1.0-alpha.0",
+  "keywords": [
+    "env",
+    "environment",
+    "deno",
+    "node",
+    "bun",
+    "ende",
+    "quickjs-ng",
+    "workerd",
+    "txiki",
+    "clearscript",
+    "browsers",
+    "jerryscript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neotales/js-lib.git",
+    "directory": "std/npm/env"
+  },
+  "license": "MIT",
+  "module": "./esm/mod.js",
+  "types": "./types/mod.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      },
+      "default": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      }
+    },
+    "./expand": {
+      "import": {
+        "types": "./types/expand.d.ts",
+        "default": "./esm/expand.js"
+      },
+      "default": {
+        "types": "./types/expand.d.ts",
+        "default": "./esm/expand.js"
+      }
+    },
+    "./export": {
+      "import": {
+        "types": "./types/export.d.ts",
+        "default": "./esm/export.js"
+      },
+      "default": {
+        "types": "./types/export.d.ts",
+        "default": "./esm/export.js"
+      }
+    }
+  },
+  "scripts": {},
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@neotales/args": "workspace:*",
+    "@neotales/chars": "workspace:*",
+    "@neotales/strings": "workspace:*"
+  },
+  "_generatedBy": "dnt@0.44.0"
+}

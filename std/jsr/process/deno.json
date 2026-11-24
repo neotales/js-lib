@@ -1,0 +1,34 @@
+{
+  "name": "@neotales/process",
+  "version": "0.1.0-alpha.0",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./args": "./args.ts",
+    "./chdir": "./chdir.ts",
+    "./cwd": "./cwd.ts",
+    "./exec-path": "./exec_path.ts",
+    "./exit": "./exit.ts",
+    "./pid": "./pid.ts",
+    "./ppid": "./ppid.ts",
+    "./popd": "./popd.ts",
+    "./pushd": "./pushd.ts",
+    "./streams": "./streams.ts"
+  },
+  "publish": {
+    "exclude": [
+      "**/*.test.ts", "**/*_test.ts", "**/*.spec.ts", "**/*_spec.ts",
+      "**/*.test.js", "**/*_test.js", "**/*.spec.js", "**/*_spec.js",
+      "**/*.test.mjs", "**/*_test.mjs", "**/*.spec.mjs", "**/*_spec.mjs",
+      "**/*.test.cjs", "**/*_test.cjs", "**/*.spec.cjs", "**/*_spec.cjs",
+      "**/*.test.d.ts", "**/*_test.d.ts", "**/*.spec.d.ts", "**/*_spec.d.ts",
+      "**/test/run.ts", "**/test/assert.ts", "**/test/main.ts",
+      "ende.json", "ende.jsonc"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neotales/js-libraries.git",
+    "directory": "std/jsr/process"
+  }
+}

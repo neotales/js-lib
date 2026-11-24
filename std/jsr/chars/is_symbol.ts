@@ -11,15 +11,15 @@ import { S } from "./tables/s.ts";
  * ```ts
  * import { isSymbol } from "@neotales/chars/is-symbol";
  *
- * console.log(isSymbol(0x1F600)); //  false
- * console.log(isSymbol(0x110000)); //  false
- * console.log(isSymbol(0x10FFFF)); //  false
- * console.log(isSymbol(0.32)); //  false
+ * console.log(isSymbol(0x1F600)); //  true, an emoji is category So
+ * console.log(isSymbol(0x110000)); //  false, not a code point
+ * console.log(isSymbol(0x10FFFF)); //  false, unassigned
+ * console.log(isSymbol(0.32)); //  false, not an integer
  * console.log(isSymbol(0x2B)); //  true
  * ```
  */
 export function isSymbol(char: Char): boolean {
-  if (Number.isInteger(char) === false || char < 0 || char > 255) {
+  if (Number.isInteger(char) === false || char < 0 || char > 0x10ffff) {
     return false;
   }
 
@@ -27,7 +27,7 @@ export function isSymbol(char: Char): boolean {
     return (latin1[char] & pS) !== 0;
   }
 
-  const hi = S.R16[S.R32.length - 1][1];
+  const hi = S.R16[S.R16.length - 1][1];
   if (char <= hi) {
     return is16(S.R16, char);
   }
@@ -53,10 +53,10 @@ export function isSymbol(char: Char): boolean {
  * ```ts
  * import { isSymbolUnsafe } from "@neotales/chars/is-symbol";
  *
- * console.log(isSymbolUnsafe(0x1F600)); //  false
- * console.log(isSymbolUnsafe(0x110000)); //  false
- * console.log(isSymbolUnsafe(0x10FFFF)); //  false
- * console.log(isSymbolUnsafe(0.32)); //  false
+ * console.log(isSymbolUnsafe(0x1F600)); //  true, an emoji is category So
+ * console.log(isSymbolUnsafe(0x110000)); //  false, not a code point
+ * console.log(isSymbolUnsafe(0x10FFFF)); //  false, unassigned
+ * console.log(isSymbolUnsafe(0.32)); //  false, not an integer
  * console.log(isSymbolUnsafe(0x2B)); //  true
  * ```
  */
@@ -65,7 +65,7 @@ export function isSymbolUnsafe(char: Char): boolean {
     return (latin1[char] & pS) !== 0;
   }
 
-  const hi = S.R16[S.R32.length - 1][1];
+  const hi = S.R16[S.R16.length - 1][1];
   if (char <= hi) {
     return is16(S.R16, char);
   }

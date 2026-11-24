@@ -7,7 +7,8 @@ Unicode character utility functions such as `isSpace`,
 
 The module will handle characters outside latin and ascii such as
 Cyrillic or Greek characters. The chars library is heavily based on golang's
-unicode module.
+unicode module. The Unicode tables are generated from Go 1.24.0, which uses
+Unicode 15.0.0.
 
 ![logo](https://raw.githubusercontent.com/neotales/js-lib/refs/heads/dev/eng/assets/logo.png)
 
@@ -48,7 +49,7 @@ The module README table is the support claim.
 | txiki.js | ✅ | one ESM bundle, run with `tjs run` |
 | ClearScript | ✅ | TypeScript graph transpiled to .js, then loaded by the host |
 | browsers | ✅ | one ESM bundle, no syntax rewrite |
-| JerryScript | ✅ | IIFE, ES2020 pass, then console mapped to print; no private fields, so syntax is unchanged |
+| JerryScript | ✅ | IIFE, ES2020 pass, then console mapped to print; no private fields, so syntax is unchanged. Four full Unicode sweeps are a printed skip: classify every generated range, sample the whole code space, case conversion over every CaseRange, and simpleFold over every mapping. Range gaps, Latin-1, equalFold orbits, safe APIs, and reported examples run |
 
 Load instructions: [runtime documentation](../../../docs/README.md).
 
@@ -91,11 +92,11 @@ console.log(isSpaceAt(str2, 3)); // true
 
 The char module provides functions common character functions:
 
-- `equalFold` - `true` when two characters are equal using case insensitivity.
+- `equalFold` - `true` when two characters are equal using case insensitivity. Returns `false` for an invalid code point.
 - `isAscii` - `true` when character is ascii.
 - `isChar` - `true` when a number value is a valid character.
 - `isControl` - `true` when a character is a control character.
-- `isDigit` - `true` when a character is a digit.
+- `isDigit` - `true` when a character is a decimal digit (`Nd`). Superscript numerals such as `²` and fractions such as `¼` are not digits.
 - `isLatin1` - `true` when a character is in the latin charset.
 - `isLetterOrDigit` - `true` when a character is a letter or digit.
 - `isLetter` - `true` when a charater is a letter.
@@ -104,7 +105,7 @@ The char module provides functions common character functions:
 - `isSpace` - `true` when a character is a space character.`\n \r\t\f`.
 - `isSymbol` - `true` when a character is a symbol.
 - `isUpper` - `true` when a character is uppercase.
-- `simpleFold` - when a character has a lower or higher character, fold will flip them.
+- `simpleFold` - when a character has a lower or higher character, fold will flip them. Returns an invalid code point unchanged.
 - `toLower` - converts a character to its lowercase counterpart, if applicable.
 - `toUpper` - converts a character to its uppercase counterpart, if applicable.
 

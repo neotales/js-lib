@@ -381,3 +381,56 @@ test("the branch glob keeps GitHub's slash rule", () => {
   assert.equal(githubGlobMatches("rt-*", "rt-txiki"), true);
   assert.equal(githubGlobMatches("rt-*", "rt/feature"), false);
 });
+
+test("the Linux txiki steps capture the wrapper path and prepend its directory", () => {
+  const paths = jsWorkflowPaths().filter((path) =>
+    /js-(?:std|os)-ci\.yml$/.test(path)
+  );
+  assert.ok(paths.length >= 2, "expected std and os CI workflows");
+  for (const path of paths) {
+    const text = readFileSync(path, "utf8");
+    assert.match(
+      text,
+      /TXIKI_BIN="\$\(eng\/scripts\/build-txiki\.sh\)"/,
+      `${path}: wrapper call missing`,
+    );
+    assert.match(
+      text,
+      /echo "TXIKI_BIN=\$TXIKI_BIN" >> "\$GITHUB_ENV"/,
+      `${path}: env export missing`,
+    );
+    assert.match(
+      text,
+      /PATH="\$\(dirname "\$TXIKI_BIN"\):\$PATH"/,
+      `${path}: binary directory missing from PATH`,
+    );
+    assert.doesNotMatch(
+      text,
+      /PATH="\$TXIKI_BIN:/,
+      `${path}: the binary path must not be used as a directory`,
+    );
+  }
+});
+
+test("the Linux txiki build and test steps include the pull-request base ref", () => {
+  const paths = jsWorkflowPaths().filter((path) => /js-(?:std|os)-ci\.yml$/.test(path));
+  assert.ok(paths.length >= 2, "expected std and os CI workflows");
+  for (const path of paths) {
+    const text = readFileSync(path, "utf8");
+    const satellite = path.includes(`${join("js", "lib", ".github")}`);
+    const blocks = text.split("- name:").filter((block) =>
+      block.includes("txiki.js (Linux source build)") || block.includes("Build pinned txiki.js")
+    );
+    assert.ok(blocks.length >= 2, `${path}: missing Linux txiki steps`);
+    for (const block of blocks) {
+      assert.match(block, /github\.base_ref == 'plab-js-lib'/, `${path}: no plab-js-lib base ref`);
+      if (satellite) {
+        assert.match(block, /github\.base_ref == 'dev'/, `${path}: no dev base ref`);
+        assert.match(block, /github\.base_ref == 'rt-txiki'/, `${path}: no rt-txiki base ref`);
+      } else {
+        assert.doesNotMatch(block, /github\.base_ref == 'dev'/, `${path}: root must stay plab-js-lib`);
+        assert.doesNotMatch(block, /github\.base_ref == 'rt-txiki'/, `${path}: root must stay plab-js-lib`);
+      }
+    }
+  }
+});

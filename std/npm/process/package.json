@@ -1,0 +1,144 @@
+{
+  "name": "@neotales/process",
+  "version": "0.1.0-alpha.0",
+  "keywords": [
+    "process",
+    "runtime",
+    "deno",
+    "node",
+    "bun",
+    "ende",
+    "quickjs-ng",
+    "workerd",
+    "txiki",
+    "clearscript",
+    "browsers",
+    "jerryscript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neotales/js-lib.git",
+    "directory": "std/npm/process"
+  },
+  "license": "MIT",
+  "module": "./esm/mod.js",
+  "types": "./types/mod.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      },
+      "default": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      }
+    },
+    "./args": {
+      "import": {
+        "types": "./types/args.d.ts",
+        "default": "./esm/args.js"
+      },
+      "default": {
+        "types": "./types/args.d.ts",
+        "default": "./esm/args.js"
+      }
+    },
+    "./chdir": {
+      "import": {
+        "types": "./types/chdir.d.ts",
+        "default": "./esm/chdir.js"
+      },
+      "default": {
+        "types": "./types/chdir.d.ts",
+        "default": "./esm/chdir.js"
+      }
+    },
+    "./cwd": {
+      "import": {
+        "types": "./types/cwd.d.ts",
+        "default": "./esm/cwd.js"
+      },
+      "default": {
+        "types": "./types/cwd.d.ts",
+        "default": "./esm/cwd.js"
+      }
+    },
+    "./exec-path": {
+      "import": {
+        "types": "./types/exec_path.d.ts",
+        "default": "./esm/exec_path.js"
+      },
+      "default": {
+        "types": "./types/exec_path.d.ts",
+        "default": "./esm/exec_path.js"
+      }
+    },
+    "./exit": {
+      "import": {
+        "types": "./types/exit.d.ts",
+        "default": "./esm/exit.js"
+      },
+      "default": {
+        "types": "./types/exit.d.ts",
+        "default": "./esm/exit.js"
+      }
+    },
+    "./pid": {
+      "import": {
+        "types": "./types/pid.d.ts",
+        "default": "./esm/pid.js"
+      },
+      "default": {
+        "types": "./types/pid.d.ts",
+        "default": "./esm/pid.js"
+      }
+    },
+    "./ppid": {
+      "import": {
+        "types": "./types/ppid.d.ts",
+        "default": "./esm/ppid.js"
+      },
+      "default": {
+        "types": "./types/ppid.d.ts",
+        "default": "./esm/ppid.js"
+      }
+    },
+    "./popd": {
+      "import": {
+        "types": "./types/popd.d.ts",
+        "default": "./esm/popd.js"
+      },
+      "default": {
+        "types": "./types/popd.d.ts",
+        "default": "./esm/popd.js"
+      }
+    },
+    "./pushd": {
+      "import": {
+        "types": "./types/pushd.d.ts",
+        "default": "./esm/pushd.js"
+      },
+      "default": {
+        "types": "./types/pushd.d.ts",
+        "default": "./esm/pushd.js"
+      }
+    },
+    "./streams": {
+      "import": {
+        "types": "./types/streams.d.ts",
+        "default": "./esm/streams.js"
+      },
+      "default": {
+        "types": "./types/streams.d.ts",
+        "default": "./esm/streams.js"
+      }
+    }
+  },
+  "scripts": {},
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "_generatedBy": "dnt@0.44.0"
+}

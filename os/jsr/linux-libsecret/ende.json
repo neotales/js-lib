@@ -1,0 +1,40 @@
+{
+  "name": "@neotales/linux-libsecret",
+  "version": "0.1.0-alpha.0",
+  "description": "Linux libsecret API for Node, Bun, Deno, and txiki.js.",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./ffi": "./ffi.ts",
+    "./ffi-deno": "./ffi_deno.ts",
+    "./ffi-bun": "./ffi_bun.ts",
+    "./ffi-node": "./ffi_node.ts",
+    "./ffi-txiki": "./ffi_txiki.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neotales/js-lib.git",
+    "directory": "os/jsr/linux-libsecret"
+  },
+  "publish": {
+    "exclude": [
+      "**/*.test.ts",
+      "**/*_test.ts",
+      "**/*.test.js",
+      "**/*_test.js",
+      "**/*.test.mjs",
+      "**/*_test.mjs",
+      "**/*.test.cjs",
+      "**/*_test.cjs",
+      "**/*.test.d.ts",
+      "**/*_test.d.ts",
+      "**/*.spec.ts",
+      "**/*_spec.ts",
+      "**/test/run.ts",
+      "**/test/assert.ts",
+      "**/test/main.ts",
+      "ende.json",
+      "ende.jsonc"
+    ]
+  }
+}

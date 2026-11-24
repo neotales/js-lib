@@ -40,13 +40,33 @@ export function deepEqual(actual: unknown, expected: unknown, message?: string):
   deepStrictEqual(actual, expected, message);
 }
 
-export function throws(fn: () => unknown, message?: string): void {
+export function throws(
+  fn: () => unknown,
+  error?: string | RegExp | (new (...args: never[]) => Error),
+  message?: string,
+): void {
+  let thrown: unknown;
   try {
     fn();
-  } catch {
+  } catch (caught) {
+    thrown = caught;
+  }
+  if (thrown === undefined) fail(message ?? "expected a throw");
+  if (error === undefined) return;
+  if (typeof error === "string") {
+    if (!(thrown instanceof Error) || !thrown.message.includes(error)) {
+      fail(message ?? `expected message containing ${error}, got ${seen(thrown)}`);
+    }
     return;
   }
-  fail(message ?? "expected a throw");
+  if (error instanceof RegExp) {
+    const text = thrown instanceof Error ? thrown.message : String(thrown);
+    if (!error.test(text)) fail(message ?? `${seen(text)} did not match ${error}`);
+    return;
+  }
+  if (!(thrown instanceof error)) {
+    fail(message ?? `expected ${error.name}, got ${seen(thrown)}`);
+  }
 }
 
 export function match(value: string, regexp: RegExp, message?: string): void {

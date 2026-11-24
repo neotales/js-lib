@@ -164,7 +164,17 @@ settings:
 
 importers:
 
-  .: {}
+  npm/args:
+    dependencies:
+      '@neotales/chars':
+        specifier: workspace:*
+        version: link:../chars
+      '@neotales/slices':
+        specifier: workspace:*
+        version: link:../slices
+      '@neotales/strings':
+        specifier: workspace:*
+        version: link:../strings
 
   npm/chars: {}
 
@@ -173,3 +183,12 @@ importers:
       '@neotales/chars':
         specifier: workspace:*
         version: link:../chars
+
+  npm/strings:
+    dependencies:
+      '@neotales/chars':
+        specifier: workspace:*
+        version: link:../chars
+      '@neotales/slices':
+        specifier: workspace:*
+        version: link:../slices

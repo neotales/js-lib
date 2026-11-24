@@ -25,7 +25,7 @@ export function isLetter(char: Char): boolean {
     return (latin1[char] & pLmask) !== 0;
   }
 
-  const hi = L.R16[L.R32.length - 1][1];
+  const hi = L.R16[L.R16.length - 1][1];
   if (char <= hi) {
     return is16(L.R16, char);
   }
@@ -60,7 +60,7 @@ export function isLetterUnsafe(char: Char): boolean {
     return (latin1[char] & pLmask) !== 0;
   }
 
-  const hi = L.R16[L.R32.length - 1][1];
+  const hi = L.R16[L.R16.length - 1][1];
   if (char <= hi) {
     return is16(L.R16, char);
   }

@@ -1,3 +1,4 @@
+// Generated from go1.24.0 src/unicode/tables.go (Unicode 15.0.0).
 const R16 = [
     [0x0021, 0x0023, 1],
     [0x0025, 0x002a, 1],
@@ -115,7 +116,7 @@ const R16 = [
     [0xff5d, 0xff5f, 2],
     [0xff60, 0xff65, 1],
 ];
-export const R32 = [
+const R32 = [
     [0x10100, 0x10102, 1],
     [0x1039f, 0x103d0, 49],
     [0x1056f, 0x10857, 744],
@@ -170,8 +171,4 @@ export const R32 = [
     [0x1e95e, 0x1e95f, 1],
 ];
 const LatinOffset = 11;
-export const P = {
-    R16,
-    R32,
-    LatinOffset,
-};
+export const P = { R16, R32, LatinOffset };

@@ -8,10 +8,10 @@ import type { Char } from "./types.js";
  * ```ts
  * import { isSymbol } from "@neotales/chars/is-symbol";
  *
- * console.log(isSymbol(0x1F600)); //  false
- * console.log(isSymbol(0x110000)); //  false
- * console.log(isSymbol(0x10FFFF)); //  false
- * console.log(isSymbol(0.32)); //  false
+ * console.log(isSymbol(0x1F600)); //  true, an emoji is category So
+ * console.log(isSymbol(0x110000)); //  false, not a code point
+ * console.log(isSymbol(0x10FFFF)); //  false, unassigned
+ * console.log(isSymbol(0.32)); //  false, not an integer
  * console.log(isSymbol(0x2B)); //  true
  * ```
  */
@@ -29,10 +29,10 @@ export declare function isSymbol(char: Char): boolean;
  * ```ts
  * import { isSymbolUnsafe } from "@neotales/chars/is-symbol";
  *
- * console.log(isSymbolUnsafe(0x1F600)); //  false
- * console.log(isSymbolUnsafe(0x110000)); //  false
- * console.log(isSymbolUnsafe(0x10FFFF)); //  false
- * console.log(isSymbolUnsafe(0.32)); //  false
+ * console.log(isSymbolUnsafe(0x1F600)); //  true, an emoji is category So
+ * console.log(isSymbolUnsafe(0x110000)); //  false, not a code point
+ * console.log(isSymbolUnsafe(0x10FFFF)); //  false, unassigned
+ * console.log(isSymbolUnsafe(0.32)); //  false, not an integer
  * console.log(isSymbolUnsafe(0x2B)); //  true
  * ```
  */

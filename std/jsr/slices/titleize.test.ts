@@ -139,13 +139,13 @@ test("slices::titleize with emoji between words", () => {
 });
 
 test("slices::titleize handles CJK characters", () => {
-  // CJK characters are not considered letters by isLetter(), so they are stripped
-  equal("", toTitle("你好 世界"));
+  // CJK characters are category Lo, so isLetter() keeps them.
+  equal("你好 世界", toTitle("你好 世界"));
 });
 
 test("slices::titleize handles mixed Latin and CJK", () => {
-  // CJK characters are stripped, only Latin remains
-  equal("Hello", toTitle("hello 你好"));
+  // CJK characters are category Lo and are kept alongside Latin.
+  equal("Hello 你好", toTitle("hello 你好"));
 });
 
 // =============================================================================

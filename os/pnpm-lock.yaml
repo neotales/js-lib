@@ -164,13 +164,13 @@ settings:
 
 importers:
 
-  .: {}
-
   npm/is-elevated:
     optionalDependencies:
       koffi:
         specifier: ^2.9.0
         version: 2.16.3
+
+  npm/win-registry: {}
 
 packages:
 

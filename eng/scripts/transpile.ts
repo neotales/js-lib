@@ -9,7 +9,17 @@ const root = join(import.meta.dirname!, "../..");
 const modules = [
   ["std", "chars"],
   ["std", "slices"],
+  ["std", "strings"],
+  ["std", "args"],
+  ["std", "env"],
+  ["std", "dotenv"],
+  ["std", "path"],
+  ["std", "process"],
   ["os", "is-elevated"],
+  ["os", "win-registry"],
+  ["os", "win-cred"],
+  ["os", "darwin-keychain"],
+  ["os", "linux-libsecret"],
 ] as const;
 
 for (const [area, name] of modules) {
@@ -133,7 +143,17 @@ function runtimeKeywords(name: string): string[] | undefined {
   const portable = ["deno", "node", "bun", "ende", "quickjs-ng", "workerd", "txiki", "clearscript", "browsers"];
   if (name === "chars") return ["chars", ...portable, "jerryscript"];
   if (name === "slices") return ["slices", ...portable, "jerryscript"];
+  if (name === "strings") return ["strings", ...portable, "jerryscript"];
+  if (name === "args") return ["args", ...portable, "jerryscript"];
+  if (name === "env") return ["env", "environment", ...portable, "jerryscript"];
+  if (name === "dotenv") return ["dotenv", "env-file", ...portable, "jerryscript"];
+  if (name === "path") return ["path", "filesystem", ...portable, "jerryscript"];
+  if (name === "process") return ["process", "runtime", ...portable, "jerryscript"];
   if (name === "is-elevated") return ["is-elevated", "deno", "node", "bun", "ende", "workerd", "txiki"];
+  if (name === "win-registry") return ["win-registry", "windows", "deno", "node", "bun", "txiki", "ffi"];
+  if (name === "win-cred") return ["win-cred", "windows", "credentials", "deno", "node", "bun", "txiki", "ffi"];
+  if (name === "darwin-keychain") return ["darwin-keychain", "macos", "keychain", "deno", "node", "bun", "txiki", "ffi"];
+  if (name === "linux-libsecret") return ["linux-libsecret", "linux", "libsecret", "keyring", "deno", "node", "bun", "txiki", "ffi"];
   return undefined;
 }
 

@@ -1,5 +1,5 @@
 import type { Char } from "./types.ts";
-import { is16, is32, latin1, pLl } from "./tables/latin1.ts";
+import { is16, is32, latin1, pLmask, pLl } from "./tables/latin1.ts";
 import { Ll } from "./tables/ll.ts";
 
 /**
@@ -23,7 +23,7 @@ export function isLower(char: Char): boolean {
   }
 
   if (char < 256) {
-    return (latin1[char] & pLl) !== 0;
+    return (latin1[char] & pLmask) === pLl;
   }
 
   const hi = Ll.R16[Ll.R16.length - 1][1];
@@ -60,7 +60,7 @@ export function isLower(char: Char): boolean {
  */
 export function isLowerUnsafe(char: Char): boolean {
   if (char < 256) {
-    return (latin1[char] & pLl) !== 0;
+    return (latin1[char] & pLmask) === pLl;
   }
 
   const hi = Ll.R16[Ll.R16.length - 1][1];

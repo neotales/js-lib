@@ -68,6 +68,18 @@ jobs:
         with:
           deno-version: v2.9.8
 
+      - name: Probe Windows registry denial without FFI
+        if: ${{ !cancelled() && matrix.os == 'windows-latest' }}
+        run: deno run --allow-sys eng/scripts/check-win-registry-denial.ts
+
+      - name: Probe Windows registry Deno lifecycle
+        if: ${{ !cancelled() && matrix.os == 'windows-latest' }}
+        run: deno run --allow-sys --allow-ffi eng/scripts/check-win-registry-deno.ts
+
+      - name: Check module runtime documentation
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: node --test eng/scripts/readme-runtime-tables.test.mjs
+
       - name: Refuse a package that still contains tests
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: node eng/scripts/check-publish.mjs
@@ -76,9 +88,21 @@ jobs:
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: bun run sync:ende -- --check
 
+      - name: Test the libsecret ABI gate
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: node --test eng/scripts/libsecret-abi-gate.test.mjs
+
       - name: Test suite discovery
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: node --test eng/scripts/test-discovery.test.mjs
+
+      - name: Test the txiki build wrapper
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: node --test eng/scripts/build-txiki.test.mjs
+
+      - name: Test the Windows registry write wrapper
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: node --test eng/scripts/check-win-registry-write.test.mjs
 
       - name: Test the release planner
         if: ${{ !cancelled() && runner.os == 'Linux' }}
@@ -124,9 +148,9 @@ jobs:
           !cancelled() &&
           matrix.os != 'ubuntu-24.04' &&
           (
-            github.ref_name == 'dev' || github.head_ref == 'dev' ||
-            github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
-            github.ref_name == 'rt-txiki' || github.head_ref == 'rt-txiki'
+            github.ref_name == 'dev' || github.head_ref == 'dev' || github.base_ref == 'dev' ||
+            github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' || github.base_ref == 'plab-js-lib' ||
+            github.ref_name == 'rt-txiki' || github.head_ref == 'rt-txiki' || github.base_ref == 'rt-txiki'
           )
         uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
         with:
@@ -139,15 +163,31 @@ jobs:
             macos-x64 = { asset_pattern = "txiki-macos-x86_64.zip", strip_components = 1, bin = "tjs" }
             windows-x64 = { asset_pattern = "txiki-windows-x86_64.zip", strip_components = 1, bin = "tjs.exe" }
 
+      - name: Build pinned txiki.js 26.11.0 for Linux
+        if: >-
+          !cancelled() &&
+          matrix.os == 'ubuntu-24.04' &&
+          (
+            github.ref_name == 'dev' || github.head_ref == 'dev' || github.base_ref == 'dev' ||
+            github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' || github.base_ref == 'plab-js-lib' ||
+            github.ref_name == 'rt-txiki' || github.head_ref == 'rt-txiki' || github.base_ref == 'rt-txiki'
+          )
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsecret-1-0 dbus
+          TXIKI_BIN="$(eng/scripts/build-txiki.sh)"
+          echo "TXIKI_BIN=$TXIKI_BIN" >> "$GITHUB_ENV"
+
       # Each lane writes under .build/<lane>, so these can share the runner.
       - parallel:
           - name: Test on Bun
             if: ${{ !cancelled() }}
-            run: bun run test -- os/is-elevated
+            run: bun run test -- os/is-elevated os/win-registry os/win-cred os/darwin-keychain os/linux-libsecret
 
           - name: Test on Deno
             if: ${{ !cancelled() }}
-            run: bun run test:deno -- os/is-elevated
+            run: bun run test:deno -- os/is-elevated os/win-registry os/win-cred os/darwin-keychain os/linux-libsecret
 
           - name: Test on Ende
             if: >-
@@ -158,7 +198,7 @@ jobs:
                 github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
                 github.ref_name == 'rt-ende' || github.head_ref == 'rt-ende'
               )
-            run: bun run test:ende -- os/is-elevated
+            run: bun run test:ende -- os/is-elevated os/win-registry os/win-cred os/darwin-keychain os/linux-libsecret
 
           - name: Test on QuickJS-ng
             if: >-
@@ -169,7 +209,7 @@ jobs:
                 github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
                 github.ref_name == 'rt-quickjs' || github.head_ref == 'rt-quickjs'
               )
-            run: bun run test:quickjs -- os/is-elevated
+            run: bun run test:quickjs -- os/is-elevated os/win-registry os/win-cred os/darwin-keychain os/linux-libsecret
 
           - name: Test on workerd
             if: >-
@@ -180,7 +220,7 @@ jobs:
                 github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
                 github.ref_name == 'rt-workerd' || github.head_ref == 'rt-workerd'
               )
-            run: bun run test:workerd -- os/is-elevated
+            run: bun run test:workerd -- os/is-elevated os/win-registry os/win-cred os/darwin-keychain os/linux-libsecret
 
           - name: Test on ClearScript
             if: >-
@@ -191,19 +231,46 @@ jobs:
                 github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
                 github.ref_name == 'rt-clearscript' || github.head_ref == 'rt-clearscript'
               )
-            run: bun run test:clearscript -- os/is-elevated
+            run: bun run test:clearscript -- os/is-elevated os/win-registry os/win-cred os/darwin-keychain os/linux-libsecret
 
           - name: Test on txiki.js
             if: >-
               !cancelled() &&
               matrix.os != 'ubuntu-24.04' &&
               (
-                github.ref_name == 'dev' || github.head_ref == 'dev' ||
-                github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
-                github.ref_name == 'rt-txiki' || github.head_ref == 'rt-txiki'
+                github.ref_name == 'dev' || github.head_ref == 'dev' || github.base_ref == 'dev' ||
+                github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' || github.base_ref == 'plab-js-lib' ||
+                github.ref_name == 'rt-txiki' || github.head_ref == 'rt-txiki' || github.base_ref == 'rt-txiki'
               )
             shell: bash
-            run: bun run test:txiki -- os/is-elevated
+            run: bun run test:txiki -- os/is-elevated os/win-cred os/darwin-keychain os/linux-libsecret
+
+          - name: Test on txiki.js (Linux source build)
+            if: >-
+              !cancelled() &&
+              matrix.os == 'ubuntu-24.04' &&
+              (
+                github.ref_name == 'dev' || github.head_ref == 'dev' || github.base_ref == 'dev' ||
+                github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' || github.base_ref == 'plab-js-lib' ||
+                github.ref_name == 'rt-txiki' || github.head_ref == 'rt-txiki' || github.base_ref == 'rt-txiki'
+              )
+            shell: bash
+            run: PATH="$(dirname "$TXIKI_BIN"):$PATH" dbus-run-session -- bun run test:txiki -- os/is-elevated os/win-registry os/win-cred os/darwin-keychain os/linux-libsecret
+
+          - name: Test win-registry on txiki.js (Windows, disposable key)
+            if: >-
+              !cancelled() &&
+              matrix.os == 'windows-latest' &&
+              (
+                github.ref_name == 'dev' || github.head_ref == 'dev' || github.base_ref == 'dev' ||
+                github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' || github.base_ref == 'plab-js-lib' ||
+                github.ref_name == 'rt-txiki' || github.head_ref == 'rt-txiki' || github.base_ref == 'rt-txiki'
+              )
+            shell: bash
+            env:
+              WIN_REGISTRY_WRITE_TESTS: "1"
+              REQUIRE_WIN_REGISTRY_FFI: "1"
+            run: bun eng/scripts/check-win-registry-write.mjs
 
       # koffi is the optional dependency of @neotales/is-elevated. Install it for
       # this runner only; it stays out of package.json and the lockfile. npm
@@ -228,7 +295,7 @@ jobs:
           REQUIRE_NODE_FFI: "1"
         run: |
           node --experimental-ffi -e 'require("node:ffi")'
-          bun run test:node -- os/is-elevated
+          bun run test:node -- os/is-elevated os/win-registry
 
       - name: Test on Node koffi
         if: ${{ !cancelled() }}
@@ -280,4 +347,4 @@ jobs:
           BROWSER_LANE: ${{ matrix.browser }}
         run: node --test eng/scripts/browser-harness.test.mjs
       - name: Test on ${{ matrix.browser }}
-        run: bun run test:${{ matrix.browser }} -- os/is-elevated
+        run: bun run test:${{ matrix.browser }} -- os/is-elevated os/win-registry

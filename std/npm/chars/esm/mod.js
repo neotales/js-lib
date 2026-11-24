@@ -7,7 +7,8 @@
  *
  * The module will handle characters outside latin and ascii such as
  * Cyrillic or Greek characters. The chars library is heavily based on golang's
- * unicode module.
+ * unicode module. The Unicode tables are generated from Go 1.24.0, which uses
+ * Unicode 15.0.0.
  *
  * ![logo](https://raw.githubusercontent.com/neotales/js-lib/refs/heads/dev/eng/assets/logo.png)
  *
@@ -74,10 +75,12 @@
  * The char module provides functions common character functions:
  *
  * - `equalFold` - `true` when two characters are equal using case insensitivity.
+ *   Returns `false` for an invalid code point.
  * - `isAscii` - `true` when character is ascii.
  * - `isChar` - `true` when a number value is a valid character.
  * - `isControl` - `true` when a character is a control character.
- * - `isDigit` - `true` when a character is a digit.
+ * - `isDigit` - `true` when a character is a decimal digit (`Nd`). Superscript
+ *   numerals such as `²` and fractions such as `¼` are not digits.
  * - `isLatin1` - `true` when a character is in the latin charset.
  * - `isLetterOrDigit` - `true` when a character is a letter or digit.
  * - `isLetter` - `true` when a charater is a letter.
@@ -87,6 +90,7 @@
  * - `isSymbol` - `true` when a character is a symbol.
  * - `isUpper` - `true` when a character is uppercase.
  * - `simpleFold` - when a character has a lower or higher character, fold will flip them.
+ *   Returns an invalid code point unchanged.
  * - `toLower` - converts a character to its lowercase counterpart, if applicable.
  * - `toUpper` - converts a character to its uppercase counterpart, if applicable.
  *

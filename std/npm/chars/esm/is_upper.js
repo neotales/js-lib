@@ -1,4 +1,4 @@
-import { is16, is32, latin1, pLu } from "./tables/latin1.js";
+import { is16, is32, latin1, pLmask, pLu } from "./tables/latin1.js";
 import { Lu } from "./tables/lu.js";
 /**
  * Determines if the given character is an uppercase letter.
@@ -21,7 +21,7 @@ export function isUpper(char) {
         return false;
     }
     if (char < 256) {
-        return (latin1[char] & pLu) !== 0;
+        return (latin1[char] & pLmask) === pLu;
     }
     const hi = Lu.R16[Lu.R16.length - 1][1];
     if (char <= hi) {
@@ -52,7 +52,7 @@ export function isUpper(char) {
  */
 export function isUpperUnsafe(char) {
     if (char < 256) {
-        return (latin1[char] & pLu) !== 0;
+        return (latin1[char] & pLmask) === pLu;
     }
     const hi = Lu.R16[Lu.R16.length - 1][1];
     if (char <= hi) {

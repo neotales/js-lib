@@ -1,3 +1,4 @@
+// Generated from go1.24.0 src/unicode/tables.go (Unicode 15.0.0).
 export const UpperLower = 0x10ffff + 1;
 export const CaseRanges = [
     [0x0041, 0x005a, [0, 32, 0]],

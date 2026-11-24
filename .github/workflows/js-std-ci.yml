@@ -68,6 +68,10 @@ jobs:
         with:
           deno-version: v2.9.8
 
+      - name: Check module runtime documentation
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: node --test eng/scripts/readme-runtime-tables.test.mjs
+
       - name: Refuse a package that still contains tests
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: node eng/scripts/check-publish.mjs
@@ -76,9 +80,21 @@ jobs:
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: bun run sync:ende -- --check
 
+      - name: Test the shared runner
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: bun run test:harness
+
+      - name: Check the runner types
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: bun run test:types
+
       - name: Test suite discovery
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: node --test eng/scripts/test-discovery.test.mjs
+
+      - name: Test the txiki build wrapper
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: node --test eng/scripts/build-txiki.test.mjs
 
       - name: Test the release planner
         if: ${{ !cancelled() && runner.os == 'Linux' }}
@@ -124,9 +140,9 @@ jobs:
           !cancelled() &&
           matrix.os != 'ubuntu-24.04' &&
           (
-            github.ref_name == 'dev' || github.head_ref == 'dev' ||
-            github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
-            github.ref_name == 'rt-txiki' || github.head_ref == 'rt-txiki'
+            github.ref_name == 'dev' || github.head_ref == 'dev' || github.base_ref == 'dev' ||
+            github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' || github.base_ref == 'plab-js-lib' ||
+            github.ref_name == 'rt-txiki' || github.head_ref == 'rt-txiki' || github.base_ref == 'rt-txiki'
           )
         uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
         with:
@@ -139,19 +155,39 @@ jobs:
             macos-x64 = { asset_pattern = "txiki-macos-x86_64.zip", strip_components = 1, bin = "tjs" }
             windows-x64 = { asset_pattern = "txiki-windows-x86_64.zip", strip_components = 1, bin = "tjs.exe" }
 
+      - name: Build pinned txiki.js 26.11.0 for Linux
+        if: >-
+          !cancelled() &&
+          matrix.os == 'ubuntu-24.04' &&
+          (
+            github.ref_name == 'dev' || github.head_ref == 'dev' || github.base_ref == 'dev' ||
+            github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' || github.base_ref == 'plab-js-lib' ||
+            github.ref_name == 'rt-txiki' || github.head_ref == 'rt-txiki' || github.base_ref == 'rt-txiki'
+          )
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsecret-1-0 dbus
+          TXIKI_BIN="$(eng/scripts/build-txiki.sh)"
+          echo "TXIKI_BIN=$TXIKI_BIN" >> "$GITHUB_ENV"
+
       # Each lane writes under .build/<lane>, so these can share the runner.
       - parallel:
           - name: Test on Bun
             if: ${{ !cancelled() }}
-            run: bun run test -- std/chars std/slices
+            run: bun run test -- std/chars std/slices std/strings std/args std/env std/dotenv std/path
+
+          - name: Test async scenarios on Bun
+            if: ${{ !cancelled() }}
+            run: bun run test:async -- std/env
 
           - name: Test on Node
             if: ${{ !cancelled() }}
-            run: bun run test:node -- std/chars std/slices
+            run: bun run test:node -- std/chars std/slices std/strings std/args std/env std/dotenv std/path
 
           - name: Test on Deno
             if: ${{ !cancelled() }}
-            run: bun run test:deno -- std/chars std/slices
+            run: bun run test:deno -- std/chars std/slices std/strings std/args std/env std/dotenv std/path
 
           - name: Test on Ende
             if: >-
@@ -162,7 +198,7 @@ jobs:
                 github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
                 github.ref_name == 'rt-ende' || github.head_ref == 'rt-ende'
               )
-            run: bun run test:ende -- std/chars std/slices
+            run: bun run test:ende -- std/chars std/slices std/strings std/args std/env std/dotenv std/path
 
           - name: Test on QuickJS-ng
             if: >-
@@ -173,7 +209,20 @@ jobs:
                 github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
                 github.ref_name == 'rt-quickjs' || github.head_ref == 'rt-quickjs'
               )
-            run: bun run test:quickjs -- std/chars std/slices
+            run: bun run test:quickjs -- std/chars std/slices std/strings std/args std/env std/dotenv std/path
+
+          - name: Verify QuickJS-ng process arguments
+            if: >-
+              !cancelled() &&
+              matrix.os == 'ubuntu-24.04' &&
+              (
+                github.ref_name == 'dev' || github.head_ref == 'dev' ||
+                github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
+                github.ref_name == 'rt-quickjs' || github.head_ref == 'rt-quickjs'
+              )
+            env:
+              QUICKJS_PROCESS_ARGS_PROBE: "1"
+            run: bun run test:quickjs -- std/process
 
           - name: Test on workerd
             if: >-
@@ -184,7 +233,7 @@ jobs:
                 github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
                 github.ref_name == 'rt-workerd' || github.head_ref == 'rt-workerd'
               )
-            run: bun run test:workerd -- std/chars std/slices
+            run: bun run test:workerd -- std/chars std/slices std/strings std/args std/env std/dotenv std/path
 
           - name: Test on ClearScript
             if: >-
@@ -195,20 +244,31 @@ jobs:
                 github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
                 github.ref_name == 'rt-clearscript' || github.head_ref == 'rt-clearscript'
               )
-            run: bun run test:clearscript -- std/chars std/slices
+            run: bun run test:clearscript -- std/chars std/slices std/strings std/args std/env std/dotenv std/path
 
           - name: Test on txiki.js
             if: >-
               !cancelled() &&
               matrix.os != 'ubuntu-24.04' &&
               (
-                github.ref_name == 'dev' || github.head_ref == 'dev' ||
-                github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' ||
-                github.ref_name == 'rt-txiki' || github.head_ref == 'rt-txiki'
+                github.ref_name == 'dev' || github.head_ref == 'dev' || github.base_ref == 'dev' ||
+                github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' || github.base_ref == 'plab-js-lib' ||
+                github.ref_name == 'rt-txiki' || github.head_ref == 'rt-txiki' || github.base_ref == 'rt-txiki'
               )
             shell: bash
-            run: bun run test:txiki -- std/chars std/slices
+            run: bun run test:txiki -- std/chars std/slices std/strings std/args std/env std/dotenv std/path
 
+          - name: Test on txiki.js (Linux source build)
+            if: >-
+              !cancelled() &&
+              matrix.os == 'ubuntu-24.04' &&
+              (
+                github.ref_name == 'dev' || github.head_ref == 'dev' || github.base_ref == 'dev' ||
+                github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' || github.base_ref == 'plab-js-lib' ||
+                github.ref_name == 'rt-txiki' || github.head_ref == 'rt-txiki' || github.base_ref == 'rt-txiki'
+              )
+            shell: bash
+            run: PATH="$(dirname "$TXIKI_BIN"):$PATH" dbus-run-session -- bun run test:txiki -- std/chars std/slices std/strings std/args std/env std/dotenv std/path
   browser:
     name: browser (${{ matrix.browser }})
     if: >-
@@ -243,4 +303,4 @@ jobs:
           BROWSER_LANE: ${{ matrix.browser }}
         run: node --test eng/scripts/browser-harness.test.mjs
       - name: Test on ${{ matrix.browser }}
-        run: bun run test:${{ matrix.browser }} -- std/chars std/slices
+        run: bun run test:${{ matrix.browser }} -- std/chars std/slices std/strings std/args std/env std/dotenv std/path

@@ -42,7 +42,7 @@ export function toLower(char: Char): Char {
       const delta = (d as number[])[1];
 
       if (delta > MAX_RUNE) {
-        return ((l + (char - l)) & ~1) | (1 & 1);
+        return l + (((char - l) & ~1) | 1);
       }
 
       return char + delta;

@@ -20,5 +20,8 @@ test("chars::isSymbolAt", () => {
   ok(!isSymbolAt(str, 1));
 
   const str2 = "🦄";
-  ok(!isSymbolAt(str2, 0));
+  ok(isSymbolAt(str2, 0)); // U+1F984 is category So
+  ok(isSymbol(0x1f600)); // U+1F600 is category So
+  ok(isSymbol(0x1fbca)); // U+1FBCA is category So
+  ok(!isSymbol(0x41)); // a letter is not a symbol
 });

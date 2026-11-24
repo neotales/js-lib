@@ -1,0 +1,707 @@
+{
+  "name": "@neotales/path",
+  "version": "0.1.0-alpha.0",
+  "keywords": [
+    "path",
+    "filesystem",
+    "deno",
+    "node",
+    "bun",
+    "ende",
+    "quickjs-ng",
+    "workerd",
+    "txiki",
+    "clearscript",
+    "browsers",
+    "jerryscript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neotales/js-lib.git",
+    "directory": "std/npm/path"
+  },
+  "license": "MIT",
+  "module": "./esm/mod.js",
+  "types": "./types/mod.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      },
+      "default": {
+        "types": "./types/mod.d.ts",
+        "default": "./esm/mod.js"
+      }
+    },
+    "./basename": {
+      "import": {
+        "types": "./types/basename.d.ts",
+        "default": "./esm/basename.js"
+      },
+      "default": {
+        "types": "./types/basename.d.ts",
+        "default": "./esm/basename.js"
+      }
+    },
+    "./common": {
+      "import": {
+        "types": "./types/common.d.ts",
+        "default": "./esm/common.js"
+      },
+      "default": {
+        "types": "./types/common.d.ts",
+        "default": "./esm/common.js"
+      }
+    },
+    "./constants": {
+      "import": {
+        "types": "./types/constants.d.ts",
+        "default": "./esm/constants.js"
+      },
+      "default": {
+        "types": "./types/constants.d.ts",
+        "default": "./esm/constants.js"
+      }
+    },
+    "./dirname": {
+      "import": {
+        "types": "./types/dirname.d.ts",
+        "default": "./esm/dirname.js"
+      },
+      "default": {
+        "types": "./types/dirname.d.ts",
+        "default": "./esm/dirname.js"
+      }
+    },
+    "./extname": {
+      "import": {
+        "types": "./types/extname.d.ts",
+        "default": "./esm/extname.js"
+      },
+      "default": {
+        "types": "./types/extname.d.ts",
+        "default": "./esm/extname.js"
+      }
+    },
+    "./format": {
+      "import": {
+        "types": "./types/format.d.ts",
+        "default": "./esm/format.js"
+      },
+      "default": {
+        "types": "./types/format.d.ts",
+        "default": "./esm/format.js"
+      }
+    },
+    "./from-file-url": {
+      "import": {
+        "types": "./types/from_file_url.d.ts",
+        "default": "./esm/from_file_url.js"
+      },
+      "default": {
+        "types": "./types/from_file_url.d.ts",
+        "default": "./esm/from_file_url.js"
+      }
+    },
+    "./glob-to-regexp": {
+      "import": {
+        "types": "./types/glob_to_regexp.d.ts",
+        "default": "./esm/glob_to_regexp.js"
+      },
+      "default": {
+        "types": "./types/glob_to_regexp.d.ts",
+        "default": "./esm/glob_to_regexp.js"
+      }
+    },
+    "./is-absolute": {
+      "import": {
+        "types": "./types/is_absolute.d.ts",
+        "default": "./esm/is_absolute.js"
+      },
+      "default": {
+        "types": "./types/is_absolute.d.ts",
+        "default": "./esm/is_absolute.js"
+      }
+    },
+    "./is-glob": {
+      "import": {
+        "types": "./types/is_glob.d.ts",
+        "default": "./esm/is_glob.js"
+      },
+      "default": {
+        "types": "./types/is_glob.d.ts",
+        "default": "./esm/is_glob.js"
+      }
+    },
+    "./join": {
+      "import": {
+        "types": "./types/join.d.ts",
+        "default": "./esm/join.js"
+      },
+      "default": {
+        "types": "./types/join.d.ts",
+        "default": "./esm/join.js"
+      }
+    },
+    "./join-globs": {
+      "import": {
+        "types": "./types/join_globs.d.ts",
+        "default": "./esm/join_globs.js"
+      },
+      "default": {
+        "types": "./types/join_globs.d.ts",
+        "default": "./esm/join_globs.js"
+      }
+    },
+    "./match": {
+      "import": {
+        "types": "./types/match.d.ts",
+        "default": "./esm/match.js"
+      },
+      "default": {
+        "types": "./types/match.d.ts",
+        "default": "./esm/match.js"
+      }
+    },
+    "./matches-glob": {
+      "import": {
+        "types": "./types/matches_glob.d.ts",
+        "default": "./esm/matches_glob.js"
+      },
+      "default": {
+        "types": "./types/matches_glob.d.ts",
+        "default": "./esm/matches_glob.js"
+      }
+    },
+    "./normalize": {
+      "import": {
+        "types": "./types/normalize.d.ts",
+        "default": "./esm/normalize.js"
+      },
+      "default": {
+        "types": "./types/normalize.d.ts",
+        "default": "./esm/normalize.js"
+      }
+    },
+    "./normalize-glob": {
+      "import": {
+        "types": "./types/normalize_glob.d.ts",
+        "default": "./esm/normalize_glob.js"
+      },
+      "default": {
+        "types": "./types/normalize_glob.d.ts",
+        "default": "./esm/normalize_glob.js"
+      }
+    },
+    "./parse": {
+      "import": {
+        "types": "./types/parse.d.ts",
+        "default": "./esm/parse.js"
+      },
+      "default": {
+        "types": "./types/parse.d.ts",
+        "default": "./esm/parse.js"
+      }
+    },
+    "./posix": {
+      "import": {
+        "types": "./types/posix/mod.d.ts",
+        "default": "./esm/posix/mod.js"
+      },
+      "default": {
+        "types": "./types/posix/mod.d.ts",
+        "default": "./esm/posix/mod.js"
+      }
+    },
+    "./posix/basename": {
+      "import": {
+        "types": "./types/posix/basename.d.ts",
+        "default": "./esm/posix/basename.js"
+      },
+      "default": {
+        "types": "./types/posix/basename.d.ts",
+        "default": "./esm/posix/basename.js"
+      }
+    },
+    "./posix/common": {
+      "import": {
+        "types": "./types/posix/common.d.ts",
+        "default": "./esm/posix/common.js"
+      },
+      "default": {
+        "types": "./types/posix/common.d.ts",
+        "default": "./esm/posix/common.js"
+      }
+    },
+    "./posix/constants": {
+      "import": {
+        "types": "./types/posix/constants.d.ts",
+        "default": "./esm/posix/constants.js"
+      },
+      "default": {
+        "types": "./types/posix/constants.d.ts",
+        "default": "./esm/posix/constants.js"
+      }
+    },
+    "./posix/dirname": {
+      "import": {
+        "types": "./types/posix/dirname.d.ts",
+        "default": "./esm/posix/dirname.js"
+      },
+      "default": {
+        "types": "./types/posix/dirname.d.ts",
+        "default": "./esm/posix/dirname.js"
+      }
+    },
+    "./posix/extname": {
+      "import": {
+        "types": "./types/posix/extname.d.ts",
+        "default": "./esm/posix/extname.js"
+      },
+      "default": {
+        "types": "./types/posix/extname.d.ts",
+        "default": "./esm/posix/extname.js"
+      }
+    },
+    "./posix/format": {
+      "import": {
+        "types": "./types/posix/format.d.ts",
+        "default": "./esm/posix/format.js"
+      },
+      "default": {
+        "types": "./types/posix/format.d.ts",
+        "default": "./esm/posix/format.js"
+      }
+    },
+    "./posix/from-file-url": {
+      "import": {
+        "types": "./types/posix/from_file_url.d.ts",
+        "default": "./esm/posix/from_file_url.js"
+      },
+      "default": {
+        "types": "./types/posix/from_file_url.d.ts",
+        "default": "./esm/posix/from_file_url.js"
+      }
+    },
+    "./posix/glob-to-regexp": {
+      "import": {
+        "types": "./types/posix/glob_to_regexp.d.ts",
+        "default": "./esm/posix/glob_to_regexp.js"
+      },
+      "default": {
+        "types": "./types/posix/glob_to_regexp.d.ts",
+        "default": "./esm/posix/glob_to_regexp.js"
+      }
+    },
+    "./posix/is-absolute": {
+      "import": {
+        "types": "./types/posix/is_absolute.d.ts",
+        "default": "./esm/posix/is_absolute.js"
+      },
+      "default": {
+        "types": "./types/posix/is_absolute.d.ts",
+        "default": "./esm/posix/is_absolute.js"
+      }
+    },
+    "./posix/is-glob": {
+      "import": {
+        "types": "./types/posix/is_glob.d.ts",
+        "default": "./esm/posix/is_glob.js"
+      },
+      "default": {
+        "types": "./types/posix/is_glob.d.ts",
+        "default": "./esm/posix/is_glob.js"
+      }
+    },
+    "./posix/join": {
+      "import": {
+        "types": "./types/posix/join.d.ts",
+        "default": "./esm/posix/join.js"
+      },
+      "default": {
+        "types": "./types/posix/join.d.ts",
+        "default": "./esm/posix/join.js"
+      }
+    },
+    "./posix/join-globs": {
+      "import": {
+        "types": "./types/posix/join_globs.d.ts",
+        "default": "./esm/posix/join_globs.js"
+      },
+      "default": {
+        "types": "./types/posix/join_globs.d.ts",
+        "default": "./esm/posix/join_globs.js"
+      }
+    },
+    "./posix/match": {
+      "import": {
+        "types": "./types/posix/match.d.ts",
+        "default": "./esm/posix/match.js"
+      },
+      "default": {
+        "types": "./types/posix/match.d.ts",
+        "default": "./esm/posix/match.js"
+      }
+    },
+    "./posix/matches-glob": {
+      "import": {
+        "types": "./types/posix/matches_glob.d.ts",
+        "default": "./esm/posix/matches_glob.js"
+      },
+      "default": {
+        "types": "./types/posix/matches_glob.d.ts",
+        "default": "./esm/posix/matches_glob.js"
+      }
+    },
+    "./posix/normalize": {
+      "import": {
+        "types": "./types/posix/normalize.d.ts",
+        "default": "./esm/posix/normalize.js"
+      },
+      "default": {
+        "types": "./types/posix/normalize.d.ts",
+        "default": "./esm/posix/normalize.js"
+      }
+    },
+    "./posix/normalize-glob": {
+      "import": {
+        "types": "./types/posix/normalize_glob.d.ts",
+        "default": "./esm/posix/normalize_glob.js"
+      },
+      "default": {
+        "types": "./types/posix/normalize_glob.d.ts",
+        "default": "./esm/posix/normalize_glob.js"
+      }
+    },
+    "./posix/parse": {
+      "import": {
+        "types": "./types/posix/parse.d.ts",
+        "default": "./esm/posix/parse.js"
+      },
+      "default": {
+        "types": "./types/posix/parse.d.ts",
+        "default": "./esm/posix/parse.js"
+      }
+    },
+    "./posix/relative": {
+      "import": {
+        "types": "./types/posix/relative.d.ts",
+        "default": "./esm/posix/relative.js"
+      },
+      "default": {
+        "types": "./types/posix/relative.d.ts",
+        "default": "./esm/posix/relative.js"
+      }
+    },
+    "./posix/resolve": {
+      "import": {
+        "types": "./types/posix/resolve.d.ts",
+        "default": "./esm/posix/resolve.js"
+      },
+      "default": {
+        "types": "./types/posix/resolve.d.ts",
+        "default": "./esm/posix/resolve.js"
+      }
+    },
+    "./posix/to-file-url": {
+      "import": {
+        "types": "./types/posix/to_file_url.d.ts",
+        "default": "./esm/posix/to_file_url.js"
+      },
+      "default": {
+        "types": "./types/posix/to_file_url.d.ts",
+        "default": "./esm/posix/to_file_url.js"
+      }
+    },
+    "./posix/to-namespaced-path": {
+      "import": {
+        "types": "./types/posix/to_namespaced_path.d.ts",
+        "default": "./esm/posix/to_namespaced_path.js"
+      },
+      "default": {
+        "types": "./types/posix/to_namespaced_path.d.ts",
+        "default": "./esm/posix/to_namespaced_path.js"
+      }
+    },
+    "./relative": {
+      "import": {
+        "types": "./types/relative.d.ts",
+        "default": "./esm/relative.js"
+      },
+      "default": {
+        "types": "./types/relative.d.ts",
+        "default": "./esm/relative.js"
+      }
+    },
+    "./resolve": {
+      "import": {
+        "types": "./types/resolve.d.ts",
+        "default": "./esm/resolve.js"
+      },
+      "default": {
+        "types": "./types/resolve.d.ts",
+        "default": "./esm/resolve.js"
+      }
+    },
+    "./to-file-url": {
+      "import": {
+        "types": "./types/to_file_url.d.ts",
+        "default": "./esm/to_file_url.js"
+      },
+      "default": {
+        "types": "./types/to_file_url.d.ts",
+        "default": "./esm/to_file_url.js"
+      }
+    },
+    "./to-namespaced-path": {
+      "import": {
+        "types": "./types/to_namespaced_path.d.ts",
+        "default": "./esm/to_namespaced_path.js"
+      },
+      "default": {
+        "types": "./types/to_namespaced_path.d.ts",
+        "default": "./esm/to_namespaced_path.js"
+      }
+    },
+    "./types": {
+      "import": {
+        "types": "./types/types.d.ts",
+        "default": "./esm/types.js"
+      },
+      "default": {
+        "types": "./types/types.d.ts",
+        "default": "./esm/types.js"
+      }
+    },
+    "./windows": {
+      "import": {
+        "types": "./types/windows/mod.d.ts",
+        "default": "./esm/windows/mod.js"
+      },
+      "default": {
+        "types": "./types/windows/mod.d.ts",
+        "default": "./esm/windows/mod.js"
+      }
+    },
+    "./windows/basename": {
+      "import": {
+        "types": "./types/windows/basename.d.ts",
+        "default": "./esm/windows/basename.js"
+      },
+      "default": {
+        "types": "./types/windows/basename.d.ts",
+        "default": "./esm/windows/basename.js"
+      }
+    },
+    "./windows/common": {
+      "import": {
+        "types": "./types/windows/common.d.ts",
+        "default": "./esm/windows/common.js"
+      },
+      "default": {
+        "types": "./types/windows/common.d.ts",
+        "default": "./esm/windows/common.js"
+      }
+    },
+    "./windows/constants": {
+      "import": {
+        "types": "./types/windows/constants.d.ts",
+        "default": "./esm/windows/constants.js"
+      },
+      "default": {
+        "types": "./types/windows/constants.d.ts",
+        "default": "./esm/windows/constants.js"
+      }
+    },
+    "./windows/dirname": {
+      "import": {
+        "types": "./types/windows/dirname.d.ts",
+        "default": "./esm/windows/dirname.js"
+      },
+      "default": {
+        "types": "./types/windows/dirname.d.ts",
+        "default": "./esm/windows/dirname.js"
+      }
+    },
+    "./windows/extname": {
+      "import": {
+        "types": "./types/windows/extname.d.ts",
+        "default": "./esm/windows/extname.js"
+      },
+      "default": {
+        "types": "./types/windows/extname.d.ts",
+        "default": "./esm/windows/extname.js"
+      }
+    },
+    "./windows/format": {
+      "import": {
+        "types": "./types/windows/format.d.ts",
+        "default": "./esm/windows/format.js"
+      },
+      "default": {
+        "types": "./types/windows/format.d.ts",
+        "default": "./esm/windows/format.js"
+      }
+    },
+    "./windows/from-file-url": {
+      "import": {
+        "types": "./types/windows/from_file_url.d.ts",
+        "default": "./esm/windows/from_file_url.js"
+      },
+      "default": {
+        "types": "./types/windows/from_file_url.d.ts",
+        "default": "./esm/windows/from_file_url.js"
+      }
+    },
+    "./windows/glob-to-regexp": {
+      "import": {
+        "types": "./types/windows/glob_to_regexp.d.ts",
+        "default": "./esm/windows/glob_to_regexp.js"
+      },
+      "default": {
+        "types": "./types/windows/glob_to_regexp.d.ts",
+        "default": "./esm/windows/glob_to_regexp.js"
+      }
+    },
+    "./windows/is-absolute": {
+      "import": {
+        "types": "./types/windows/is_absolute.d.ts",
+        "default": "./esm/windows/is_absolute.js"
+      },
+      "default": {
+        "types": "./types/windows/is_absolute.d.ts",
+        "default": "./esm/windows/is_absolute.js"
+      }
+    },
+    "./windows/is-glob": {
+      "import": {
+        "types": "./types/windows/is_glob.d.ts",
+        "default": "./esm/windows/is_glob.js"
+      },
+      "default": {
+        "types": "./types/windows/is_glob.d.ts",
+        "default": "./esm/windows/is_glob.js"
+      }
+    },
+    "./windows/join": {
+      "import": {
+        "types": "./types/windows/join.d.ts",
+        "default": "./esm/windows/join.js"
+      },
+      "default": {
+        "types": "./types/windows/join.d.ts",
+        "default": "./esm/windows/join.js"
+      }
+    },
+    "./windows/join-globs": {
+      "import": {
+        "types": "./types/windows/join_globs.d.ts",
+        "default": "./esm/windows/join_globs.js"
+      },
+      "default": {
+        "types": "./types/windows/join_globs.d.ts",
+        "default": "./esm/windows/join_globs.js"
+      }
+    },
+    "./windows/match": {
+      "import": {
+        "types": "./types/windows/match.d.ts",
+        "default": "./esm/windows/match.js"
+      },
+      "default": {
+        "types": "./types/windows/match.d.ts",
+        "default": "./esm/windows/match.js"
+      }
+    },
+    "./windows/matches-glob": {
+      "import": {
+        "types": "./types/windows/matches_glob.d.ts",
+        "default": "./esm/windows/matches_glob.js"
+      },
+      "default": {
+        "types": "./types/windows/matches_glob.d.ts",
+        "default": "./esm/windows/matches_glob.js"
+      }
+    },
+    "./windows/normalize": {
+      "import": {
+        "types": "./types/windows/normalize.d.ts",
+        "default": "./esm/windows/normalize.js"
+      },
+      "default": {
+        "types": "./types/windows/normalize.d.ts",
+        "default": "./esm/windows/normalize.js"
+      }
+    },
+    "./windows/normalize-glob": {
+      "import": {
+        "types": "./types/windows/normalize_glob.d.ts",
+        "default": "./esm/windows/normalize_glob.js"
+      },
+      "default": {
+        "types": "./types/windows/normalize_glob.d.ts",
+        "default": "./esm/windows/normalize_glob.js"
+      }
+    },
+    "./windows/parse": {
+      "import": {
+        "types": "./types/windows/parse.d.ts",
+        "default": "./esm/windows/parse.js"
+      },
+      "default": {
+        "types": "./types/windows/parse.d.ts",
+        "default": "./esm/windows/parse.js"
+      }
+    },
+    "./windows/relative": {
+      "import": {
+        "types": "./types/windows/relative.d.ts",
+        "default": "./esm/windows/relative.js"
+      },
+      "default": {
+        "types": "./types/windows/relative.d.ts",
+        "default": "./esm/windows/relative.js"
+      }
+    },
+    "./windows/resolve": {
+      "import": {
+        "types": "./types/windows/resolve.d.ts",
+        "default": "./esm/windows/resolve.js"
+      },
+      "default": {
+        "types": "./types/windows/resolve.d.ts",
+        "default": "./esm/windows/resolve.js"
+      }
+    },
+    "./windows/to-file-url": {
+      "import": {
+        "types": "./types/windows/to_file_url.d.ts",
+        "default": "./esm/windows/to_file_url.js"
+      },
+      "default": {
+        "types": "./types/windows/to_file_url.d.ts",
+        "default": "./esm/windows/to_file_url.js"
+      }
+    },
+    "./windows/to-namespaced-path": {
+      "import": {
+        "types": "./types/windows/to_namespaced_path.d.ts",
+        "default": "./esm/windows/to_namespaced_path.js"
+      },
+      "default": {
+        "types": "./types/windows/to_namespaced_path.d.ts",
+        "default": "./esm/windows/to_namespaced_path.js"
+      }
+    }
+  },
+  "scripts": {},
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@neotales/chars": "workspace:*"
+  },
+  "_generatedBy": "dnt@0.44.0"
+}

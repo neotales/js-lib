@@ -1,3 +1,4 @@
+// Generated from go1.24.0 src/unicode/tables.go (Unicode 15.0.0).
 const R16 = [
     [0x0041, 0x005a, 1],
     [0x0061, 0x007a, 1],

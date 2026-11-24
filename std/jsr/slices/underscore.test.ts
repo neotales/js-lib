@@ -138,12 +138,12 @@ test("slices::underscore strips special characters", () => {
   equal("helloworld", toSnake("hello@world"));
 });
 
-test("slices::underscore strips CJK characters", () => {
-  // CJK characters are not considered letters by isLetter, so stripped
-  // The space before them creates a trailing underscore
-  equal("hello_", toSnake("hello 你好"));
-  // No separator without space
-  equal("hello", toSnake("hello你好"));
+test("slices::underscore keeps CJK characters", () => {
+  // CJK characters are category Lo, so isLetter() keeps them.
+  // The space before them creates an underscore.
+  equal("hello_你好", toSnake("hello 你好"));
+  // No separator without space.
+  equal("hello你好", toSnake("hello你好"));
 });
 
 // =============================================================================

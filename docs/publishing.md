@@ -355,6 +355,12 @@ not rewrite the dependency to a published version until `deno publish` prepares 
 `os/pnpm-workspace.yaml`; without this file it tries to migrate it during `deno publish`, and
 the `is-elevated` type check fails on `@types/node`. `os/ende.json` is the synced copy.
 
+`std/deno.json` is also a nested Deno workspace for `std/jsr/*`, with
+`nodeModulesDir: auto`. It prevents Deno from trying to migrate the neighboring
+`std/pnpm-workspace.yaml` during JSR dry runs and resolves intra-area imports such
+as `@neotales/env` from the workspace. Auto-install is needed for the
+`@types/node` reference used by `env`'s public types.
+
 ## Authentication
 
 Both registries use GitHub Actions OIDC. The publish job has `id-token: write` and

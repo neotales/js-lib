@@ -1,3 +1,4 @@
+// Generated from go1.24.0 src/unicode/tables.go (Unicode 15.0.0).
 export const pC = 1 << 0; // a control character.
 export const pP = 1 << 1; // a punctuation character.
 export const pN = 1 << 2; // a numeral.

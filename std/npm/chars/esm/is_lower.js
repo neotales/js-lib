@@ -1,4 +1,4 @@
-import { is16, is32, latin1, pLl } from "./tables/latin1.js";
+import { is16, is32, latin1, pLmask, pLl } from "./tables/latin1.js";
 import { Ll } from "./tables/ll.js";
 /**
  * Checks if the given value represents a lowercase letter.
@@ -20,7 +20,7 @@ export function isLower(char) {
         return false;
     }
     if (char < 256) {
-        return (latin1[char] & pLl) !== 0;
+        return (latin1[char] & pLmask) === pLl;
     }
     const hi = Ll.R16[Ll.R16.length - 1][1];
     if (char <= hi) {
@@ -53,7 +53,7 @@ export function isLower(char) {
  */
 export function isLowerUnsafe(char) {
     if (char < 256) {
-        return (latin1[char] & pLl) !== 0;
+        return (latin1[char] & pLmask) === pLl;
     }
     const hi = Ll.R16[Ll.R16.length - 1][1];
     if (char <= hi) {

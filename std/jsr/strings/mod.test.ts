@@ -1,0 +1,46 @@
+import { deepStrictEqual as equal } from "@neotales/assert";
+import { test } from "@neotales/test";
+import * as strings from "./mod.ts";
+
+test("strings::mod exports the public API", () => {
+  equal(Object.keys(strings).sort(), [
+    "StringBuilder",
+    "camelize",
+    "capitalize",
+    "dasherize",
+    "endsWith",
+    "endsWithFold",
+    "equal",
+    "equalFold",
+    "indexOf",
+    "indexOfFold",
+    "inflect",
+    "isEmpty",
+    "isNull",
+    "isNullOrEmpty",
+    "isNullOrSpace",
+    "isSpace",
+    "isUndefined",
+    "lastIndexOf",
+    "lastIndexOfFold",
+    "pascalize",
+    "pluralize",
+    "singularize",
+    "split",
+    "startsWith",
+    "startsWithFold",
+    "titleize",
+    "toCharArray",
+    "toString",
+    "trim",
+    "trimChar",
+    "trimEnd",
+    "trimEndChar",
+    "trimEndSlice",
+    "trimSlice",
+    "trimStart",
+    "trimStartChar",
+    "trimStartSlice",
+    "underscore",
+  ]);
+});

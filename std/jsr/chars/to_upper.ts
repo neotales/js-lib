@@ -45,7 +45,7 @@ export function toUpper(char: Char): Char {
       const delta = (d as number[])[0];
 
       if (delta > MAX_RUNE) {
-        return ((l + (char - l)) & ~1) | (1 & 1);
+        return l + (((char - l) & ~1) | 0);
       }
 
       return char + delta;
