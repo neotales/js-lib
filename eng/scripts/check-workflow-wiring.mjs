@@ -6,14 +6,16 @@
 // asks for bash instead of the default PowerShell. The platform check proves
 // the npm package preflight carries the one reviewed Linux gate inside a
 // three-OS matrix, because spawnSync("npm") is ENOENT on Windows where npm is
-// npm.cmd.
+// npm.cmd. The base-ref check proves the Linux txiki steps also run for a pull
+// request, which selects a workflow with github.base_ref rather than
+// github.ref_name.
 //
 // The check reads the workflow as text. It is deliberately dependency-free so
 // it runs in the same Node gate as the release scripts.
 
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, join, resolve, sep } from "node:path";
+import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const TAG_TRIGGERS = [
@@ -234,16 +236,32 @@ export function pushEventAllows(text, ref) {
   return refFiltersAllow(branches, name);
 }
 
-function satelliteRoot() {
+// The published prefix root: `js/lib` in the monorepo, the repository root in
+// a flattened satellite checkout. Derived from this module's own location, so
+// a copy of the prefix classifies itself correctly.
+export function satelliteRoot() {
   return resolve(fileURLToPath(new URL("../..", import.meta.url)));
 }
 
-// True for a workflow inside the published prefix. In the monorepo the root
-// copies live outside js/lib; in the satellite checkout every workflow is in
-// the prefix, so the branch-filter rule applies to all of them there.
+// Which copy a workflow is. The published prefix keeps its own workflows in
+// `<prefix>/.github/workflows`; the monorepo root keeps the copies that build
+// and publish `js/lib` in `<repo>/.github/workflows`. The prefix root comes
+// from this module's own location, so in a flattened satellite checkout the
+// repository root is the prefix root and its workflows are still the
+// satellite's. A substring test such as `includes("js/lib/.github")` is false
+// there and misclassifies every satellite workflow as the root copy.
+export function workflowLayout(label) {
+  const rel = relative(
+    join(satelliteRoot(), ".github", "workflows"),
+    resolve(label),
+  );
+  const inside =
+    rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+  return inside ? "satellite" : "root";
+}
+
 function satelliteCopy(label) {
-  const workflows = `${join(satelliteRoot(), ".github", "workflows")}${sep}`;
-  return resolve(label).startsWith(workflows);
+  return workflowLayout(label) === "satellite";
 }
 
 // Trigger regression: a release tag must start js-cd.yml only. Every other js
@@ -536,6 +554,255 @@ export function checkWorkflowPlatformGates(text, label = "workflow") {
   return errors;
 }
 
+// The Linux txiki steps are selected by branch. A pull request is selected by
+// github.base_ref, not github.ref_name or github.head_ref, so a copy that
+// omitted it would skip the job on every pull request. The root copy serves
+// the monorepo's plab-js-lib branch only. The published satellite serves dev,
+// plab-js-lib and rt-txiki.
+export const TXIKI_LINUX_BASE_REFS = {
+  root: ["plab-js-lib"],
+  satellite: ["dev", "plab-js-lib", "rt-txiki"],
+};
+
+const TXIKI_REF_FIELDS = ["ref_name", "head_ref", "base_ref"];
+const TXIKI_KNOWN_BRANCHES = new Set(
+  Object.values(TXIKI_LINUX_BASE_REFS).flat(),
+);
+
+// The step names this check owns. The build version is free; the rest of the
+// name is exact.
+const TXIKI_STEP_NAMES = {
+  build: /^Build pinned txiki\.js .+ for Linux$/,
+  test: /^Test on txiki\.js \(Linux source build\)$/,
+};
+const TXIKI_STEP_PATTERNS = Object.values(TXIKI_STEP_NAMES);
+
+// Mark lines that are YAML block-scalar content, so a `- name:` or `if:`
+// inside a `run: |` script is not mistaken for a real step key. A block starts
+// on a key whose value is `|`/`>` with optional chomping/indent indicators and
+// ends at the first non-blank line no deeper than the key.
+function blockScalarContent(lines) {
+  const inside = new Set();
+  let keyIndent = -1;
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    if (keyIndent !== -1) {
+      if (line.trim() === "" || indentOf(line) > keyIndent) {
+        inside.add(index);
+        continue;
+      }
+      keyIndent = -1;
+    }
+    const match =
+      /^(\s*)(-\s+)?([A-Za-z0-9_-]+):\s*[|>][0-9+-]*\s*(?:#.*)?$/.exec(line);
+    if (match) {
+      keyIndent = match[1].length + (match[2] ? 2 : 0);
+    }
+  }
+  return inside;
+}
+
+// The two steps this check validates. A matching name inside a block scalar
+// or a comment is not a step.
+function txikiSteps(text) {
+  const lines = text.split("\n");
+  const blockScalar = blockScalarContent(lines);
+  const steps = [];
+  for (let index = 0; index < lines.length; index++) {
+    if (blockScalar.has(index)) continue;
+    const match = /^(\s*)- name:\s*(.*)$/.exec(lines[index]);
+    if (!match) continue;
+    const name = match[2].trim().replace(/^["']|["']$/g, "");
+    if (!TXIKI_STEP_PATTERNS.some((pattern) => pattern.test(name))) continue;
+    const end = findStepEnd(lines, index, lines.length);
+    steps.push({ name, lines: lines.slice(index, end) });
+  }
+  return steps;
+}
+
+// The step's own if: value. Only a single-line value and the folded block
+// scalar (`>` / `>-`) used by the real steps are supported. A literal block,
+// a comment on the key line, or any other form is refused rather than guessed
+// at.
+function stepIfCondition(step) {
+  const nameLine = /^(\s*)- name:/.exec(step[0]);
+  if (!nameLine) return { error: "has no name key" };
+  const keyIndent = nameLine[1].length + 2;
+  let ifIndex = -1;
+  for (let index = 1; index < step.length; index++) {
+    const line = step[index];
+    if (line.trim() === "") continue;
+    if (indentOf(line) < keyIndent) break;
+    if (indentOf(line) === keyIndent && /^if:/.test(line.trimStart())) {
+      ifIndex = index;
+      break;
+    }
+  }
+  if (ifIndex === -1) return { error: "has no if: condition" };
+  const raw = step[ifIndex].trimStart().slice("if:".length).trim();
+  if (raw === ">" || raw === ">-") {
+    const body = [];
+    for (let index = ifIndex + 1; index < step.length; index++) {
+      const line = step[index];
+      if (line.trim() === "") {
+        body.push("");
+        continue;
+      }
+      if (indentOf(line) <= keyIndent) break;
+      body.push(line.trim());
+    }
+    if (body.every((line) => line === "")) {
+      return { error: "has an empty if: block" };
+    }
+    return { condition: body.join(" ") };
+  }
+  if (raw === "" || /^[|>]/.test(raw)) {
+    return {
+      error: `uses an unsupported if: form ${raw === "" ? "(empty)" : raw}`,
+    };
+  }
+  return { condition: raw };
+}
+
+// Normalise only whitespace between tokens. Every operator, name and string
+// still has to match exactly; this is not a general Actions expression parser.
+function normalizeTxikiCondition(condition) {
+  return condition
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\s*(&&|\|\||==)\s*/g, "$1")
+    .replace(/\s*([!()])\s*/g, "$1");
+}
+
+function txikiTerm(field, branch) {
+  return `github.${field}=='${branch}'`;
+}
+
+function displayTerm(term) {
+  return term.replace("==", " == ");
+}
+
+function txikiTermsFor(branches) {
+  return new Set(
+    branches.flatMap((branch) =>
+      TXIKI_REF_FIELDS.map((field) => txikiTerm(field, branch)),
+    ),
+  );
+}
+
+// Terms the copy must carry: every reviewed field for each branch it serves.
+function txikiRequiredTerms(layout) {
+  const branches = TXIKI_LINUX_BASE_REFS[layout] ?? TXIKI_LINUX_BASE_REFS.root;
+  return txikiTermsFor(branches);
+}
+
+// Terms the copy may carry. The satellite carries every reviewed comparison.
+// The root copy may keep ref_name/head_ref for the other branches, which are
+// source branches of a pull request, but must not select them as a base.
+// base_ref is therefore allowed only for the branches the root serves.
+function txikiAllowedTerms(layout) {
+  const allowed = txikiTermsFor(TXIKI_LINUX_BASE_REFS.satellite);
+  if (layout === "satellite") return allowed;
+  const rootBranches = new Set(TXIKI_LINUX_BASE_REFS.root);
+  for (const branch of TXIKI_LINUX_BASE_REFS.satellite) {
+    if (!rootBranches.has(branch)) {
+      allowed.delete(txikiTerm("base_ref", branch));
+    }
+  }
+  return allowed;
+}
+
+// The one supported txiki if: shape:
+//   !cancelled() && matrix.os == 'ubuntu-24.04' && (refs joined by ||)
+// A different Linux selector, extra &&/||, negation, a comment, a duplicate,
+// or an unknown field or branch is an error, not something to interpret.
+function txikiConditionErrors(condition, name, label, layout) {
+  const errors = [];
+  const text = normalizeTxikiCondition(condition);
+  const shape =
+    /^!cancelled\(\)&&matrix\.os=='ubuntu-24\.04'&&\((.+)\)$/.exec(text);
+  if (!shape) {
+    errors.push(
+      `${label}: step "${name}" has an unsupported if: condition; expected !cancelled() && matrix.os == 'ubuntu-24.04' && (github ref comparisons joined by ||)`,
+    );
+    return errors;
+  }
+
+  const required = txikiRequiredTerms(layout);
+  const allowed = txikiAllowedTerms(layout);
+  const seen = new Set();
+  for (const raw of shape[1].split("||")) {
+    const term = raw.trim();
+    const match =
+      /^github\.(ref_name|head_ref|base_ref)=='([^']+)'$/.exec(term);
+    if (!match) {
+      errors.push(
+        `${label}: step "${name}" has unsupported syntax in its if: condition: "${term}"`,
+      );
+      continue;
+    }
+    if (!TXIKI_KNOWN_BRANCHES.has(match[2])) {
+      errors.push(
+        `${label}: step "${name}" has an unknown branch in its if: condition: "${term}"`,
+      );
+      continue;
+    }
+    const normalized = txikiTerm(match[1], match[2]);
+    if (seen.has(normalized)) {
+      errors.push(
+        `${label}: step "${name}" repeats ${displayTerm(normalized)}`,
+      );
+      continue;
+    }
+    seen.add(normalized);
+    if (!allowed.has(normalized)) {
+      errors.push(
+        layout === "root"
+          ? `${label}: root copy step "${name}" must not include ${displayTerm(normalized)}`
+          : `${label}: step "${name}" has an unexpected ref comparison ${displayTerm(normalized)}`,
+      );
+    }
+  }
+  for (const term of required) {
+    if (!seen.has(term)) {
+      errors.push(
+        `${label}: step "${name}" must include the pull-request base ref ${displayTerm(term)}`,
+      );
+    }
+  }
+  return errors;
+}
+
+// Base-ref regression: the Linux txiki build and test steps must name the
+// pull-request base branches their copy serves. A branch push sets
+// github.base_ref to the empty string, so these comparisons do not narrow a
+// push; they add the pull_request case.
+export function checkWorkflowTxikiBaseRefs(
+  text,
+  label = "workflow",
+  layout = workflowLayout(label),
+) {
+  if (!/^js-(?:std|os)-ci\.ya?ml$/.test(basename(label))) return [];
+  const steps = txikiSteps(text);
+  const errors = [];
+  for (const [kind, pattern] of Object.entries(TXIKI_STEP_NAMES)) {
+    if (!steps.some((step) => pattern.test(step.name))) {
+      errors.push(`${label}: missing the Linux txiki ${kind} step`);
+    }
+  }
+  for (const step of steps) {
+    const parsed = stepIfCondition(step.lines);
+    if (parsed.error) {
+      errors.push(`${label}: step "${step.name}" ${parsed.error}`);
+      continue;
+    }
+    errors.push(
+      ...txikiConditionErrors(parsed.condition, step.name, label, layout),
+    );
+  }
+  return errors;
+}
+
 function jobBlock(lines, name) {
   const start = lines.findIndex((line) => line === `  ${name}:`);
   if (start === -1) return null;
@@ -691,6 +958,7 @@ function main() {
         ...checkWorkflowTriggers(text, path),
         ...checkWorkflowShells(text, path),
         ...checkWorkflowPlatformGates(text, path),
+        ...checkWorkflowTxikiBaseRefs(text, path),
       ]) {
         console.error(error);
         failed++;

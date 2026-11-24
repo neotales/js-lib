@@ -1,18 +1,31 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { spawnSync } from "node:child_process";
+import {
+  copyFileSync,
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import {
   LINUX_GATE,
   checkWorkflowPlatformGates,
   checkWorkflowShells,
   checkWorkflowTriggers,
+  checkWorkflowTxikiBaseRefs,
   checkWorkflowWiring,
   githubGlobMatches,
   jsWorkflowPaths,
   normalizeGate,
   pushEventAllows,
   refFiltersAllow,
+  satelliteRoot,
+  workflowLayout,
   workflowWiringPaths,
 } from "./check-workflow-wiring.mjs";
 
@@ -416,21 +429,252 @@ test("the Linux txiki build and test steps include the pull-request base ref", (
   const paths = jsWorkflowPaths().filter((path) => /js-(?:std|os)-ci\.yml$/.test(path));
   assert.ok(paths.length >= 2, "expected std and os CI workflows");
   for (const path of paths) {
-    const text = readFileSync(path, "utf8");
-    const satellite = path.includes(`${join("js", "lib", ".github")}`);
-    const blocks = text.split("- name:").filter((block) =>
-      block.includes("txiki.js (Linux source build)") || block.includes("Build pinned txiki.js")
+    assert.deepEqual(
+      checkWorkflowTxikiBaseRefs(readFileSync(path, "utf8"), path),
+      [],
+      path,
     );
-    assert.ok(blocks.length >= 2, `${path}: missing Linux txiki steps`);
-    for (const block of blocks) {
-      assert.match(block, /github\.base_ref == 'plab-js-lib'/, `${path}: no plab-js-lib base ref`);
-      if (satellite) {
-        assert.match(block, /github\.base_ref == 'dev'/, `${path}: no dev base ref`);
-        assert.match(block, /github\.base_ref == 'rt-txiki'/, `${path}: no rt-txiki base ref`);
-      } else {
-        assert.doesNotMatch(block, /github\.base_ref == 'dev'/, `${path}: root must stay plab-js-lib`);
-        assert.doesNotMatch(block, /github\.base_ref == 'rt-txiki'/, `${path}: root must stay plab-js-lib`);
-      }
-    }
+  }
+});
+
+// True when this checkout keeps the root copies beside the published prefix
+// instead of being the prefix itself.
+function inMonorepo() {
+  const root = spawnSync(
+    "git",
+    ["-C", satelliteRoot(), "rev-parse", "--show-toplevel"],
+    { encoding: "utf8" },
+  );
+  return root.status === 0 && resolve(root.stdout.trim()) !== satelliteRoot();
+}
+
+test("a workflow is classified by the prefix layout, not by a path substring", () => {
+  const satelliteWorkflows = join(satelliteRoot(), ".github", "workflows");
+  assert.equal(
+    workflowLayout(join(satelliteWorkflows, "js-std-ci.yml")),
+    "satellite",
+  );
+
+  // A second `js/lib` inside the prefix is not the prefix's own workflow
+  // directory, so it is the root copy in either checkout layout.
+  assert.equal(
+    workflowLayout(
+      join(satelliteRoot(), "js", "lib", ".github", "workflows", "js-std-ci.yml"),
+    ),
+    "root",
+  );
+
+  const layouts = [...new Set(jsWorkflowPaths().map(workflowLayout))].sort();
+  // The monorepo has its own copies beside the prefix; a flattened satellite
+  // has only the prefix, which now sits at the repository root.
+  const monorepo = inMonorepo();
+  assert.deepEqual(layouts, monorepo ? ["root", "satellite"] : ["satellite"]);
+  assert.equal(workflowWiringPaths().length, monorepo ? 2 : 1);
+});
+
+test("the txiki base-ref check rejects a satellite copy that drops dev", () => {
+  const path = join(satelliteRoot(), ".github", "workflows", "js-std-ci.yml");
+  const text = readFileSync(path, "utf8").replaceAll(
+    " || github.base_ref == 'dev'",
+    "",
+  );
+  assert.match(
+    checkWorkflowTxikiBaseRefs(text, path).join("\n"),
+    /must include the pull-request base ref github\.base_ref == 'dev'/,
+  );
+});
+
+// Rewrite the satellite ref list to the root list, so the root rule can be
+// checked from a satellite checkout where the root copies do not exist.
+function rootShaped(text) {
+  return text
+    .replaceAll(
+      "github.ref_name == 'dev' || github.head_ref == 'dev' || github.base_ref == 'dev' ||\n",
+      "",
+    )
+    .replaceAll(
+      "github.ref_name == 'rt-txiki' || github.head_ref == 'rt-txiki' || github.base_ref == 'rt-txiki'\n",
+      "",
+    )
+    .replaceAll(
+      "github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' || github.base_ref == 'plab-js-lib' ||\n",
+      "github.ref_name == 'plab-js-lib' || github.head_ref == 'plab-js-lib' || github.base_ref == 'plab-js-lib'\n",
+    );
+}
+
+test("the txiki base-ref check rejects a root copy that widens to dev", () => {
+  const path = join(satelliteRoot(), ".github", "workflows", "js-std-ci.yml");
+  // Start from a root-shaped copy: only the monorepo branch, no satellite
+  // branches. Then widen it and prove the satellite refs are refused.
+  const shaped = rootShaped(readFileSync(path, "utf8"));
+  assert.deepEqual(checkWorkflowTxikiBaseRefs(shaped, path, "root"), []);
+
+  const widened = shaped.replaceAll(
+    "github.base_ref == 'plab-js-lib'",
+    "github.base_ref == 'plab-js-lib' || github.base_ref == 'dev' || github.base_ref == 'rt-txiki'",
+  );
+  const errors = checkWorkflowTxikiBaseRefs(widened, path, "root").join("\n");
+  assert.match(
+    errors,
+    /root copy step .* must not include github\.base_ref == 'dev'/,
+  );
+  assert.match(
+    errors,
+    /root copy step .* must not include github\.base_ref == 'rt-txiki'/,
+  );
+});
+
+test("the txiki base-ref check rejects a missing plab-js-lib base ref", () => {
+  const path = join(satelliteRoot(), ".github", "workflows", "js-os-ci.yml");
+  const text = readFileSync(path, "utf8").replaceAll(
+    " || github.base_ref == 'plab-js-lib'",
+    "",
+  );
+  assert.match(
+    checkWorkflowTxikiBaseRefs(text, path, "satellite").join("\n"),
+    /must include the pull-request base ref github\.base_ref == 'plab-js-lib'/,
+  );
+});
+
+test("the txiki base-ref check rejects a ref disabled with && false", () => {
+  const path = join(satelliteRoot(), ".github", "workflows", "js-std-ci.yml");
+  const text = readFileSync(path, "utf8").replaceAll(
+    "github.base_ref == 'dev'",
+    "github.base_ref == 'dev' && false",
+  );
+  assert.match(
+    checkWorkflowTxikiBaseRefs(text, path).join("\n"),
+    /unsupported syntax in its if: condition/,
+  );
+});
+
+test("the txiki base-ref check rejects && false on the root branch", () => {
+  const path = join(satelliteRoot(), ".github", "workflows", "js-os-ci.yml");
+  const text = rootShaped(readFileSync(path, "utf8")).replaceAll(
+    "github.base_ref == 'plab-js-lib'",
+    "github.base_ref == 'plab-js-lib' && false",
+  );
+  assert.match(
+    checkWorkflowTxikiBaseRefs(text, path, "root").join("\n"),
+    /unsupported syntax in its if: condition/,
+  );
+});
+
+test("the txiki base-ref check does not count a comment inside the condition", () => {
+  const path = join(satelliteRoot(), ".github", "workflows", "js-std-ci.yml");
+  const text = readFileSync(path, "utf8").replaceAll(
+    "github.base_ref == 'dev'",
+    "# github.base_ref == 'dev'",
+  );
+  assert.match(
+    checkWorkflowTxikiBaseRefs(text, path).join("\n"),
+    /unsupported syntax in its if: condition/,
+  );
+});
+
+test("the txiki base-ref check does not count a comment above the condition", () => {
+  const path = join(satelliteRoot(), ".github", "workflows", "js-std-ci.yml");
+  const missing = readFileSync(path, "utf8").replaceAll(
+    " || github.base_ref == 'dev'",
+    "",
+  );
+  const text = missing.replace(
+    /(- name: Build pinned txiki\.js [^\n]+ for Linux\n)(\s+)(if: >-)/,
+    "$1$2# github.base_ref == 'dev'\n$2$3",
+  );
+  assert.match(
+    checkWorkflowTxikiBaseRefs(text, path).join("\n"),
+    /must include the pull-request base ref github\.base_ref == 'dev'/,
+  );
+});
+
+test("the txiki base-ref check does not count a root comment either", () => {
+  const path = join(satelliteRoot(), ".github", "workflows", "js-std-ci.yml");
+  const shaped = rootShaped(readFileSync(path, "utf8")).replaceAll(
+    " || github.base_ref == 'plab-js-lib'",
+    "",
+  );
+  const text = shaped.replace(
+    /(- name: Build pinned txiki\.js [^\n]+ for Linux\n)(\s+)(if: >-)/,
+    "$1$2# github.base_ref == 'plab-js-lib'\n$2$3",
+  );
+  assert.match(
+    checkWorkflowTxikiBaseRefs(text, path, "root").join("\n"),
+    /must include the pull-request base ref github\.base_ref == 'plab-js-lib'/,
+  );
+});
+
+// A flattened satellite is the published prefix at the repository root: the
+// js workflows and the scripts that check them. Only the layout matters, so
+// the copy leaves out the rest of the tree and has no .git directory.
+function copyFlattenedCheckout(root) {
+  mkdirSync(join(root, ".github"), { recursive: true });
+  cpSync(
+    join(satelliteRoot(), ".github", "workflows"),
+    join(root, ".github", "workflows"),
+    { recursive: true },
+  );
+  const scripts = join(root, "eng", "scripts");
+  mkdirSync(scripts, { recursive: true });
+  for (const entry of readdirSync(join(satelliteRoot(), "eng", "scripts"))) {
+    if (!entry.endsWith(".mjs")) continue;
+    copyFileSync(
+      join(satelliteRoot(), "eng", "scripts", entry),
+      join(scripts, entry),
+    );
+  }
+}
+
+test("the wiring test passes in a flattened satellite checkout", (t) => {
+  if (process.env.PLAB_WORKFLOW_WIRING_SIMULATION === "1") {
+    t.skip("inner run of the flattened checkout simulation");
+    return;
+  }
+
+  const root = mkdtempSync(join(tmpdir(), "plab-js-lib-satellite-"));
+  try {
+    copyFlattenedCheckout(root);
+    // A test file runs with NODE_TEST_CONTEXT=child-v8. Strip it so the nested
+    // runner starts the file as an ordinary `node --test`, not as a child of
+    // the runner that is already executing this one.
+    const env = { ...process.env };
+    delete env.NODE_TEST_CONTEXT;
+    const result = spawnSync(
+      process.execPath,
+      ["--test", join("eng", "scripts", "workflow-wiring.test.mjs")],
+      {
+        cwd: root,
+        encoding: "utf8",
+        env: {
+          ...env,
+          // The temporary tree is not a git checkout. Stop git from finding
+          // an enclosing repository above it and treating that as the root.
+          GIT_CEILING_DIRECTORIES: root,
+          PLAB_WORKFLOW_WIRING_SIMULATION: "1",
+          PLAB_WORKFLOW_WIRING_LAYOUT: "satellite",
+        },
+      },
+    );
+    assert.equal(
+      result.status,
+      0,
+      `flattened checkout failed\n${result.stdout}\n${result.stderr}`,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the checkout under test reports the layout the harness expects", () => {
+  const expected = process.env.PLAB_WORKFLOW_WIRING_LAYOUT;
+  if (!expected) return;
+  const paths = workflowWiringPaths();
+  assert.equal(
+    paths.length,
+    expected === "satellite" ? 1 : 2,
+    `${expected} layout must discover the expected number of js-cd copies`,
+  );
+  for (const path of paths) {
+    assert.equal(workflowLayout(path), expected, path);
   }
 });
